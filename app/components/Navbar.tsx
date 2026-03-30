@@ -12,7 +12,7 @@ export default function Navbar({ lastUpdated, onRefresh }: NavbarProps) {
   const pathname = usePathname();
 
   const navItems = [
-    { href: '/', label: '대시보드' },
+    { href: '/', label: 'Home' },
     { href: '/watchlist', label: 'Dennis' },
   ];
 

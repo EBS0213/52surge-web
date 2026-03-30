@@ -35,7 +35,6 @@ export default function Home() {
             52주 신고가 추적
           </h1>
           <p className="text-gray-500 text-lg">
-            시가총액 상위 1,000개 종목 실시간 분석
           </p>
           {error && (
             <div className="mt-4 text-sm text-red-500 bg-red-50 px-4 py-2 rounded-lg inline-block">
@@ -88,10 +87,7 @@ export default function Home() {
       <footer className="py-12 px-6 border-t border-gray-100">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <p className="text-sm text-gray-400">
-            © 2026 OURTLE. 시가총액 상위 1,000개 종목 분석.
-          </p>
-          <p className="text-xs text-gray-300">
-            Unimind · 개발자: J.Kim
+            © 2026 OURTLE. J.Kim of Unimind
           </p>
           {lastUpdated && (
             <p className="text-xs text-gray-300">

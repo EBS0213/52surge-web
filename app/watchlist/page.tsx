@@ -350,7 +350,7 @@ export default function WatchlistPage() {
             <Link href="/" className="text-2xl font-semibold tracking-tight">OURTLE</Link>
             <div className="flex items-center gap-1 bg-gray-100 rounded-full p-1">
               <Link href="/" className="text-sm px-4 py-1.5 rounded-full text-gray-600 hover:bg-white transition-colors">
-                대시보드
+                Home
               </Link>
               <span className="text-sm px-4 py-1.5 rounded-full bg-black text-white">
                 Dennis
@@ -451,13 +451,15 @@ export default function WatchlistPage() {
 
       {/* Footer */}
       <footer className="py-8 px-6 border-t border-gray-100">
-        <div className="max-w-7xl mx-auto text-center">
+        <div className="max-w-7xl mx-auto flex items-center justify-between">
           <p className="text-sm text-gray-400">
-            © 2026 OURTLE. 터틀 트레이딩 시스템 기반 워치리스트.
+            © 2026 OURTLE. J.Kim of Unimind
           </p>
-          <p className="text-xs text-gray-300 mt-1">
-            Unimind · 개발자: J.Kim
-          </p>
+          {data?.lastUpdated && (
+            <p className="text-xs text-gray-300">
+              마지막 업데이트: {new Date(data.lastUpdated).toLocaleString('ko-KR')}
+            </p>
+          )}
         </div>
       </footer>
     </div>
