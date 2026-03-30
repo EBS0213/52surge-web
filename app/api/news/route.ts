@@ -89,6 +89,8 @@ const RSS_FEEDS = [
   { url: 'https://www.mk.co.kr/rss/30100041/', source: '매일경제' },
   { url: 'https://www.mk.co.kr/rss/30000001/', source: '매일경제' },
   { url: 'https://www.yna.co.kr/RSS/economy.xml', source: '연합뉴스' },
+  { url: 'https://www.korea.kr/rss/policy.xml', source: '정책브리핑' },
+  { url: 'https://www.korea.kr/rss/pressrelease.xml', source: '정책브리핑' },
 ];
 
 function extractTag(xml: string, tag: string): string {
