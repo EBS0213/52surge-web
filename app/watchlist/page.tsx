@@ -40,10 +40,25 @@ function SettingsPanel({
     return (
       <button
         onClick={() => { setForm(settings); setOpen(true); }}
-        className="text-lg text-gray-400 hover:text-black transition-colors border border-gray-200 rounded-lg px-3 py-1.5"
+        className="group text-gray-400 hover:text-black transition-colors"
         title="계산기"
       >
-        🧮
+        <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="1" y="1" width="26" height="26" rx="4" stroke="currentColor" strokeWidth="2"/>
+          <line x1="14" y1="1" x2="14" y2="27" stroke="currentColor" strokeWidth="1.5"/>
+          <line x1="1" y1="14" x2="27" y2="14" stroke="currentColor" strokeWidth="1.5"/>
+          {/* + */}
+          <line x1="7.5" y1="5" x2="7.5" y2="9" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+          <line x1="5.5" y1="7" x2="9.5" y2="7" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+          {/* − */}
+          <line x1="19" y1="7" x2="23" y2="7" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+          {/* × */}
+          <line x1="5.5" y1="19" x2="9.5" y2="23" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+          <line x1="9.5" y1="19" x2="5.5" y2="23" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+          {/* = */}
+          <line x1="19" y1="19.5" x2="23" y2="19.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+          <line x1="19" y1="22.5" x2="23" y2="22.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+        </svg>
       </button>
     );
   }
