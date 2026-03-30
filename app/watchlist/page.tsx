@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useWatchlist } from '../hooks/useWatchlist';
 import type { TurtleSettings, WatchlistStock, TurtleSystem } from '../types/stock';
 import Link from 'next/link';
@@ -93,29 +93,62 @@ function SettingsPanel({
   );
 }
 
-// ── 요약 카드 ──
-function SummaryCards({ settings, stocks }: { settings: TurtleSettings; stocks: WatchlistStock[] }) {
-  const activeStocks = stocks.filter((s) => !s.sellSignal);
-  const s1Count = activeStocks.filter((s) => s.system === 'system1').length;
-  const s2Count = activeStocks.filter((s) => s.system === 'system2').length;
-  const totalExposure = activeStocks.reduce((sum, s) => sum + s.unitAmount, 0);
+// ── 요약 카드 (선택된 종목 기준) ──
+function SummaryCards({
+  settings,
+  stocks,
+  selectedCodes,
+}: {
+  settings: TurtleSettings;
+  stocks: WatchlistStock[];
+  selectedCodes: Set<string>;
+}) {
+  const selectedStocks = stocks.filter((s) => selectedCodes.has(s.code) && !s.sellSignal);
+  const s1Count = selectedStocks.filter((s) => s.system === 'system1').length;
+  const s2Count = selectedStocks.filter((s) => s.system === 'system2').length;
+  const totalExposure = selectedStocks.reduce((sum, s) => sum + s.unitAmount, 0);
   const exposurePct = settings.accountTotal > 0 ? totalExposure / settings.accountTotal : 0;
   const riskAmount = settings.accountTotal * settings.riskPct;
+
+  const hasSelection = selectedCodes.size > 0;
 
   return (
     <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
       {[
         { label: '계좌총액', value: `₩${formatKRW(settings.accountTotal)}`, color: '' },
         { label: '1R 금액', value: `₩${formatKRW(riskAmount)}`, color: 'text-blue-600' },
-        { label: '시스템1', value: `${s1Count}종목`, color: 'text-green-600' },
-        { label: '시스템2', value: `${s2Count}종목`, color: 'text-purple-600' },
-        { label: '총 투입비중', value: formatPct(exposurePct, 1), color: exposurePct > 0.5 ? 'text-red-600' : 'text-gray-900' },
+        {
+          label: '시스템1',
+          value: hasSelection ? `${s1Count}종목` : '-',
+          color: hasSelection ? 'text-green-600' : 'text-gray-300',
+        },
+        {
+          label: '시스템2',
+          value: hasSelection ? `${s2Count}종목` : '-',
+          color: hasSelection ? 'text-purple-600' : 'text-gray-300',
+        },
+        {
+          label: '총 투입비중',
+          value: hasSelection ? formatPct(exposurePct, 1) : '-',
+          color: hasSelection
+            ? exposurePct > 0.5
+              ? 'text-red-600'
+              : 'text-gray-900'
+            : 'text-gray-300',
+        },
       ].map(({ label, value, color }) => (
         <div key={label} className="bg-white border border-gray-100 rounded-xl p-4">
           <div className="text-xs text-gray-500 mb-1">{label}</div>
           <div className={`text-xl font-bold ${color}`}>{value}</div>
         </div>
       ))}
+      {!hasSelection && (
+        <div className="col-span-2 md:col-span-5">
+          <p className="text-xs text-gray-400 text-center">
+            아래 워치리스트에서 종목을 선택하면 투입 시드가 계산됩니다.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
@@ -123,15 +156,41 @@ function SummaryCards({ settings, stocks }: { settings: TurtleSettings; stocks: 
 // ── 종목 테이블 행 ──
 function StockRow({
   stock,
-  onRemove,
+  isSelected,
+  onToggle,
 }: {
   stock: WatchlistStock;
-  onRemove: (code: string) => void;
+  isSelected: boolean;
+  onToggle: (code: string) => void;
 }) {
   const pnlColor = stock.pnlPct > 0 ? 'text-red-600' : stock.pnlPct < 0 ? 'text-blue-600' : 'text-gray-600';
 
   return (
-    <tr className={`border-b border-gray-50 hover:bg-gray-50/50 transition-colors ${stock.sellSignal ? 'opacity-50 bg-red-50/30' : ''}`}>
+    <tr
+      className={`border-b border-gray-50 transition-colors cursor-pointer ${
+        stock.sellSignal
+          ? 'opacity-50 bg-red-50/30'
+          : isSelected
+          ? 'bg-blue-50/40 hover:bg-blue-50/60'
+          : 'hover:bg-gray-50/50'
+      }`}
+      onClick={() => !stock.sellSignal && onToggle(stock.code)}
+    >
+      {/* 체크박스 */}
+      <td className="py-3 px-3 text-center">
+        {!stock.sellSignal ? (
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={() => onToggle(stock.code)}
+            onClick={(e) => e.stopPropagation()}
+            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+          />
+        ) : (
+          <span className="text-gray-300">—</span>
+        )}
+      </td>
+
       {/* 종목명 + 코드 */}
       <td className="py-3 px-4">
         <div className="font-medium text-sm">{stock.name}</div>
@@ -202,17 +261,6 @@ function StockRow({
           </span>
         )}
       </td>
-
-      {/* 액션 */}
-      <td className="py-3 px-3 text-center">
-        <button
-          onClick={() => onRemove(stock.code)}
-          className="text-xs text-gray-400 hover:text-red-500 transition-colors"
-          title="수동 편출"
-        >
-          ✕
-        </button>
-      </td>
     </tr>
   );
 }
@@ -220,10 +268,14 @@ function StockRow({
 // ── 워치리스트 테이블 ──
 function WatchlistTable({
   stocks,
-  onRemove,
+  selectedCodes,
+  onToggle,
+  onToggleAll,
 }: {
   stocks: WatchlistStock[];
-  onRemove: (code: string) => void;
+  selectedCodes: Set<string>;
+  onToggle: (code: string) => void;
+  onToggleAll: () => void;
 }) {
   const [filter, setFilter] = useState<'all' | 'system1' | 'system2' | 'sell'>('all');
 
@@ -235,29 +287,38 @@ function WatchlistTable({
   });
 
   const sellCount = stocks.filter((s) => s.sellSignal).length;
+  const activeFiltered = filtered.filter((s) => !s.sellSignal);
+  const allActiveSelected = activeFiltered.length > 0 && activeFiltered.every((s) => selectedCodes.has(s.code));
 
   return (
     <div>
-      {/* 필터 탭 */}
-      <div className="flex items-center gap-2 mb-4">
-        {[
-          { key: 'all', label: `전체 (${stocks.length})` },
-          { key: 'system1', label: `시스템1 (${stocks.filter((s) => s.system === 'system1' && !s.sellSignal).length})` },
-          { key: 'system2', label: `시스템2 (${stocks.filter((s) => s.system === 'system2' && !s.sellSignal).length})` },
-          { key: 'sell', label: `편출대상 (${sellCount})` },
-        ].map(({ key, label }) => (
-          <button
-            key={key}
-            onClick={() => setFilter(key as typeof filter)}
-            className={`px-4 py-1.5 rounded-full text-sm transition-colors ${
-              filter === key
-                ? 'bg-black text-white'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
+      {/* 필터 탭 + 선택 개수 */}
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          {[
+            { key: 'all', label: `전체 (${stocks.length})` },
+            { key: 'system1', label: `시스템1 (${stocks.filter((s) => s.system === 'system1' && !s.sellSignal).length})` },
+            { key: 'system2', label: `시스템2 (${stocks.filter((s) => s.system === 'system2' && !s.sellSignal).length})` },
+            { key: 'sell', label: `편출대상 (${sellCount})` },
+          ].map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => setFilter(key as typeof filter)}
+              className={`px-4 py-1.5 rounded-full text-sm transition-colors ${
+                filter === key
+                  ? 'bg-black text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        {selectedCodes.size > 0 && (
+          <span className="text-xs text-blue-600 font-medium">
+            {selectedCodes.size}개 선택됨
+          </span>
+        )}
       </div>
 
       {/* 테이블 */}
@@ -265,7 +326,17 @@ function WatchlistTable({
         <table className="w-full text-left">
           <thead>
             <tr className="bg-gray-50/80 border-b border-gray-100">
-              {['종목', '시스템', '편입일', '거래일', '진입가', '현재가', '수익률', 'N값', '유닛수량', '유닛금액', '손절가', '비중', '손익비', '상태', ''].map((h) => (
+              {/* 전체선택 체크박스 */}
+              <th className="py-3 px-3 text-center w-10">
+                <input
+                  type="checkbox"
+                  checked={allActiveSelected}
+                  onChange={onToggleAll}
+                  className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                  title="전체 선택"
+                />
+              </th>
+              {['종목', '시스템', '편입일', '거래일', '진입가', '현재가', '수익률', 'N값', '유닛수량', '유닛금액', '손절가', '비중', '손익비', '상태'].map((h) => (
                 <th key={h} className="py-3 px-3 text-xs font-medium text-gray-500 whitespace-nowrap">
                   {h}
                 </th>
@@ -281,7 +352,12 @@ function WatchlistTable({
               </tr>
             ) : (
               filtered.map((stock) => (
-                <StockRow key={stock.code} stock={stock} onRemove={onRemove} />
+                <StockRow
+                  key={stock.code}
+                  stock={stock}
+                  isSelected={selectedCodes.has(stock.code)}
+                  onToggle={onToggle}
+                />
               ))
             )}
           </tbody>
@@ -339,7 +415,31 @@ function SystemInfo() {
 
 // ── 메인 페이지 ──
 export default function WatchlistPage() {
-  const { data, loading, error, refresh, updateSettings, removeStock } = useWatchlist();
+  const { data, loading, error, refresh, updateSettings } = useWatchlist();
+  const [selectedCodes, setSelectedCodes] = useState<Set<string>>(new Set());
+
+  const handleToggle = (code: string) => {
+    setSelectedCodes((prev) => {
+      const next = new Set(prev);
+      if (next.has(code)) {
+        next.delete(code);
+      } else {
+        next.add(code);
+      }
+      return next;
+    });
+  };
+
+  const handleToggleAll = () => {
+    if (!data) return;
+    const activeCodes = data.stocks.filter((s) => !s.sellSignal).map((s) => s.code);
+    const allSelected = activeCodes.every((c) => selectedCodes.has(c));
+    if (allSelected) {
+      setSelectedCodes(new Set());
+    } else {
+      setSelectedCodes(new Set(activeCodes));
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#f5f5f7]">
@@ -414,8 +514,13 @@ export default function WatchlistPage() {
         <section className="px-6 pb-16">
           <div className="max-w-7xl mx-auto">
             <SystemInfo />
-            <SummaryCards settings={data.settings} stocks={data.stocks} />
-            <WatchlistTable stocks={data.stocks} onRemove={removeStock} />
+            <SummaryCards settings={data.settings} stocks={data.stocks} selectedCodes={selectedCodes} />
+            <WatchlistTable
+              stocks={data.stocks}
+              selectedCodes={selectedCodes}
+              onToggle={handleToggle}
+              onToggleAll={handleToggleAll}
+            />
           </div>
         </section>
       )}
