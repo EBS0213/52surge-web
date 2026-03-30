@@ -29,7 +29,7 @@ export default function Home() {
   const fetchStocks = async () => {
     setLoading(true);
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/stocks/scan?max_results=6');
+      const response = await fetch('http://13.124.156.73:8000/api/stocks/scan?max_results=6');
       const data = await response.json();
       setScanData(data);
     } catch (error) {
