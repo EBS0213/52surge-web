@@ -17,38 +17,43 @@ export default function Navbar({ lastUpdated, onRefresh }: NavbarProps) {
   ];
 
   return (
-    <nav className="fixed top-0 w-full bg-white/80 backdrop-blur-xl z-50 border-b border-gray-100">
-      <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-        <div className="flex items-center gap-6">
-          <Link href="/" className="text-2xl font-semibold tracking-tight">OURTLE</Link>
-          <div className="flex items-center gap-1 bg-gray-100 rounded-full p-1">
-            {navItems.map(({ href, label }) => (
-              <Link
-                key={href}
-                href={href}
-                className={`text-sm px-4 py-1.5 rounded-full transition-colors ${
-                  pathname === href
-                    ? 'bg-black text-white'
-                    : 'text-gray-600 hover:bg-white'
-                }`}
-              >
-                {label}
-              </Link>
-            ))}
-          </div>
+    <nav className="fixed top-0 w-full bg-[#1d1d1f]/95 backdrop-blur-xl z-50">
+      <div className="max-w-[980px] mx-auto px-6 h-11 flex items-center justify-between">
+        {/* 왼쪽: 로고 */}
+        <Link href="/" className="text-white text-xl font-semibold tracking-tight">
+          OURTLE
+        </Link>
+
+        {/* 가운데: 메뉴 */}
+        <div className="flex items-center gap-7">
+          {navItems.map(({ href, label }) => (
+            <Link
+              key={href}
+              href={href}
+              className={`text-xs tracking-wide transition-colors ${
+                pathname === href
+                  ? 'text-white'
+                  : 'text-[#d1d1d6] hover:text-white'
+              }`}
+            >
+              {label}
+            </Link>
+          ))}
         </div>
-        <div className="flex items-center gap-6">
+
+        {/* 오른쪽: 업데이트 시간 + 새로고침 */}
+        <div className="flex items-center gap-4">
           {lastUpdated && (
-            <span className="text-xs text-gray-400">
-              {lastUpdated.toLocaleTimeString('ko-KR')} 업데이트
+            <span className="text-[10px] text-[#86868b]">
+              {lastUpdated.toLocaleTimeString('ko-KR')}
             </span>
           )}
           <button
             onClick={onRefresh}
-            className="text-sm text-gray-500 hover:text-black transition-colors"
+            className="text-xs text-[#86868b] hover:text-white transition-colors"
             title="새로고침"
           >
-            ↻ 새로고침
+            ↻
           </button>
         </div>
       </div>

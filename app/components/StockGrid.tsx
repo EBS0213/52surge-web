@@ -39,7 +39,7 @@ export default function StockGrid({
       <div className="max-w-7xl mx-auto">
         <div className="flex items-baseline justify-between mb-8">
           <div>
-            <h2 className="text-3xl font-bold">오늘의 선별 종목</h2>
+            <h2 className="text-3xl font-bold">워치리스트</h2>
             <p className="text-gray-500 mt-1">
               총 {data.total_found}개 중 {Math.min(visibleCount, data.stocks.length)}개 표시
               {isRealtimeAvailable && (

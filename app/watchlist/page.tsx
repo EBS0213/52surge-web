@@ -342,32 +342,26 @@ export default function WatchlistPage() {
   const { data, loading, error, refresh, updateSettings, removeStock } = useWatchlist();
 
   return (
-    <div className="min-h-screen bg-white">
-      {/* 네비게이션 */}
-      <nav className="fixed top-0 w-full bg-white/80 backdrop-blur-xl z-50 border-b border-gray-100">
-        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-6">
-            <Link href="/" className="text-2xl font-semibold tracking-tight">OURTLE</Link>
-            <div className="flex items-center gap-1 bg-gray-100 rounded-full p-1">
-              <Link href="/" className="text-sm px-4 py-1.5 rounded-full text-gray-600 hover:bg-white transition-colors">
-                Home
-              </Link>
-              <span className="text-sm px-4 py-1.5 rounded-full bg-black text-white">
-                Dennis
-              </span>
-            </div>
+    <div className="min-h-screen bg-[#f5f5f7]">
+      {/* 네비게이션 — Apple 스타일 */}
+      <nav className="fixed top-0 w-full bg-[#1d1d1f]/95 backdrop-blur-xl z-50">
+        <div className="max-w-[980px] mx-auto px-6 h-11 flex items-center justify-between">
+          <Link href="/" className="text-white text-xl font-semibold tracking-tight">OURTLE</Link>
+          <div className="flex items-center gap-7">
+            <Link href="/" className="text-xs tracking-wide text-[#d1d1d6] hover:text-white transition-colors">Home</Link>
+            <span className="text-xs tracking-wide text-white">Dennis</span>
           </div>
           <div className="flex items-center gap-4">
             {data?.lastUpdated && (
-              <span className="text-xs text-gray-400">
-                {new Date(data.lastUpdated).toLocaleTimeString('ko-KR')} 업데이트
+              <span className="text-[10px] text-[#86868b]">
+                {new Date(data.lastUpdated).toLocaleTimeString('ko-KR')}
               </span>
             )}
             <button
               onClick={() => refresh()}
-              className="text-sm text-gray-500 hover:text-black transition-colors"
+              className="text-xs text-[#86868b] hover:text-white transition-colors"
             >
-              ↻ 새로고침
+              ↻
             </button>
           </div>
         </div>
