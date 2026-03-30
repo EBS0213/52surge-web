@@ -271,12 +271,39 @@ function sortByDate(items: NewsItem[]): NewsItem[] {
   });
 }
 
+/** 제목 정규화 (비교용) */
+function normalizeTitle(title: string): string {
+  return title
+    .replace(/[\s\-–—·|:,."'""''()[\]{}]/g, '')
+    .replace(/[^\uac00-\ud7afa-zA-Z0-9]/g, '')
+    .toLowerCase()
+    .slice(0, 40);
+}
+
+/** 유사도 체크 (공통 문자 비율) */
+function isSimilar(a: string, b: string): boolean {
+  if (a === b) return true;
+  if (a.length < 5 || b.length < 5) return a === b;
+  // 짧은 쪽 기준 70% 이상 겹치면 유사
+  const shorter = a.length < b.length ? a : b;
+  const longer = a.length < b.length ? b : a;
+  let match = 0;
+  for (const char of shorter) {
+    if (longer.includes(char)) match++;
+  }
+  return match / shorter.length > 0.7;
+}
+
 function dedup(items: NewsItem[]): NewsItem[] {
-  const seen = new Set<string>();
+  const seen: string[] = [];
   return items.filter((item) => {
-    const key = item.title.slice(0, 30);
-    if (seen.has(key)) return false;
-    seen.add(key);
+    const norm = normalizeTitle(item.title);
+    if (!norm) return false;
+    // 기존 항목 중 유사한 게 있으면 제거
+    for (const existing of seen) {
+      if (isSimilar(norm, existing)) return false;
+    }
+    seen.push(norm);
     return true;
   });
 }
