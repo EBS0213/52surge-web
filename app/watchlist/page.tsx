@@ -40,9 +40,10 @@ function SettingsPanel({
     return (
       <button
         onClick={() => { setForm(settings); setOpen(true); }}
-        className="text-sm text-gray-500 hover:text-black transition-colors border border-gray-200 rounded-lg px-4 py-2"
+        className="text-lg text-gray-400 hover:text-black transition-colors border border-gray-200 rounded-lg px-3 py-1.5"
+        title="계산기"
       >
-        ⚙ 계산기
+        🧮
       </button>
     );
   }

@@ -12,7 +12,7 @@ import type { ChartCandle, TurtleSettings, TurtleSystem } from '../types/stock';
 
 /** 기본 터틀 설정값 */
 export const DEFAULT_TURTLE_SETTINGS: TurtleSettings = {
-  accountTotal: 45_000_000,
+  accountTotal: 100_000_000,
   riskPct: 0.02,
   stopPct: 0.07,
   winRate: 0.3,

@@ -18,22 +18,21 @@ export default function Navbar({ lastUpdated, onRefresh }: NavbarProps) {
 
   return (
     <nav className="fixed top-0 w-full bg-[#1d1d1f]/95 backdrop-blur-xl z-50">
-      <div className="max-w-[980px] mx-auto px-6 h-11 flex items-center justify-between">
-        {/* 왼쪽: 로고 */}
+      <div className="max-w-[980px] mx-auto px-6 h-11 flex items-center">
+        {/* 왼쪽: 로고 + 메뉴 */}
         <Link href="/" className="text-white text-xl font-semibold tracking-tight">
           OURTLE
         </Link>
 
-        {/* 가운데: 메뉴 */}
-        <div className="flex items-center gap-7">
+        <div className="flex items-center gap-7 ml-8">
           {navItems.map(({ href, label }) => (
             <Link
               key={href}
               href={href}
               className={`text-xs tracking-wide transition-colors ${
                 pathname === href
-                  ? 'text-white'
-                  : 'text-[#d1d1d6] hover:text-white'
+                  ? 'text-white font-medium'
+                  : 'text-white/70 hover:text-white'
               }`}
             >
               {label}
@@ -42,7 +41,7 @@ export default function Navbar({ lastUpdated, onRefresh }: NavbarProps) {
         </div>
 
         {/* 오른쪽: 업데이트 시간 + 새로고침 */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 ml-auto">
           {lastUpdated && (
             <span className="text-[10px] text-[#86868b]">
               {lastUpdated.toLocaleTimeString('ko-KR')}
