@@ -9,6 +9,7 @@ import MarketOverview from './components/MarketOverview';
 import StockGrid from './components/StockGrid';
 import StockChart from './components/StockChart';
 import { SkeletonCard, SkeletonMarketOverview } from './components/SkeletonCard';
+import NewsSection from './components/NewsSection';
 import type { Stock } from './types/stock';
 
 export default function Home() {
@@ -67,6 +68,9 @@ export default function Home() {
           />
         </>
       )}
+
+      {/* 경제 뉴스 */}
+      <NewsSection />
 
       {/* 차트 모달 */}
       {selectedStock && (
