@@ -25,11 +25,11 @@ export default function MarketOverview({ data }: MarketOverviewProps) {
     <section className="pt-4 pb-2 px-6">
       <div className="max-w-7xl mx-auto">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-gray-50 rounded-2xl p-6 hover:bg-gray-100 transition-colors">
+          <div className="bg-gray-50 rounded-2xl p-6 ">
             <div className="text-xs text-gray-500 mb-1">거래일</div>
             <div className="text-2xl font-semibold">{data.trading_date}</div>
           </div>
-          <div className="bg-gray-50 rounded-2xl p-6 hover:bg-gray-100 transition-colors">
+          <div className="bg-gray-50 rounded-2xl p-6 ">
             <div className="text-xs text-gray-500 mb-1">코스피 RSI</div>
             <div className={`text-2xl font-semibold ${getRSIColor(data.market_rsi.kospi)}`}>
               {data.market_rsi.kospi?.toFixed(1) || 'N/A'}
@@ -38,7 +38,7 @@ export default function MarketOverview({ data }: MarketOverviewProps) {
               {getRSILabel(data.market_rsi.kospi)}
             </div>
           </div>
-          <div className="bg-gray-50 rounded-2xl p-6 hover:bg-gray-100 transition-colors">
+          <div className="bg-gray-50 rounded-2xl p-6 ">
             <div className="text-xs text-gray-500 mb-1">코스닥 RSI</div>
             <div className={`text-2xl font-semibold ${getRSIColor(data.market_rsi.kosdaq)}`}>
               {data.market_rsi.kosdaq?.toFixed(1) || 'N/A'}
@@ -47,7 +47,7 @@ export default function MarketOverview({ data }: MarketOverviewProps) {
               {getRSILabel(data.market_rsi.kosdaq)}
             </div>
           </div>
-          <div className="bg-gray-50 rounded-2xl p-6 hover:bg-gray-100 transition-colors">
+          <div className="bg-gray-50 rounded-2xl p-6 ">
             <div className="text-xs text-gray-500 mb-1">신고가 종목 수</div>
             <div className="text-2xl font-semibold text-red-500">{data.total_found}개</div>
           </div>

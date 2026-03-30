@@ -3,16 +3,25 @@
  * KIS OpenAPI: 국내 주식 업종 기간별 시세 (FHKUP03500100)
  */
 
-import { NextResponse } from 'next/server';
+import { NextResponse, type NextRequest } from 'next/server';
 import { getAccessToken, isKISConfigured } from '../../lib/kis-client';
 
 const BASE_URL = process.env.KIS_BASE_URL || 'https://openapi.koreainvestment.com:9443';
 const APP_KEY = process.env.KIS_APP_KEY || '';
 const APP_SECRET = process.env.KIS_APP_SECRET || '';
 
-// 캐시 (5분)
-let cache: { data: unknown; fetchedAt: number } | null = null;
+// 캐시 (5분) - 기간별 캐시
+const cacheMap = new Map<string, { data: unknown; fetchedAt: number }>();
 const CACHE_TTL = 5 * 60 * 1000;
+
+// 기간 설정
+type PeriodKey = '1w' | '3m' | '1y' | '3y';
+const PERIOD_CONFIG: Record<PeriodKey, { days: number; periodCode: string }> = {
+  '1w': { days: 14, periodCode: 'D' },    // 1주 (여유있게 14일 일봉)
+  '3m': { days: 90, periodCode: 'D' },    // 3개월 일봉
+  '1y': { days: 365, periodCode: 'W' },   // 1년 주봉
+  '3y': { days: 1095, periodCode: 'M' },  // 3년 월봉
+};
 
 interface CandleData {
   date: string;
@@ -31,7 +40,7 @@ interface IndexData {
   chart: CandleData[];
 }
 
-async function fetchIndex(code: string, name: string): Promise<IndexData> {
+async function fetchIndex(code: string, name: string, periodKey: PeriodKey = '3m'): Promise<IndexData> {
   const token = await getAccessToken();
   const headers: Record<string, string> = {
     'Content-Type': 'application/json; charset=utf-8',
@@ -42,9 +51,10 @@ async function fetchIndex(code: string, name: string): Promise<IndexData> {
     custtype: 'P',
   };
 
+  const config = PERIOD_CONFIG[periodKey];
   const endDate = new Date();
   const startDate = new Date();
-  startDate.setDate(startDate.getDate() - 90);
+  startDate.setDate(startDate.getDate() - config.days);
 
   const fmt = (d: Date) =>
     `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
@@ -54,7 +64,7 @@ async function fetchIndex(code: string, name: string): Promise<IndexData> {
     FID_INPUT_ISCD: code,
     FID_INPUT_DATE_1: fmt(startDate),
     FID_INPUT_DATE_2: fmt(endDate),
-    FID_PERIOD_DIV_CODE: 'D',
+    FID_PERIOD_DIV_CODE: config.periodCode,
   });
 
   const res = await fetch(
@@ -91,10 +101,16 @@ async function fetchIndex(code: string, name: string): Promise<IndexData> {
   };
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url);
+  const period = (searchParams.get('period') || '3m') as PeriodKey;
+  const validPeriod = PERIOD_CONFIG[period] ? period : '3m';
+  const cacheKey = `market_${validPeriod}`;
+
   // 캐시 확인
-  if (cache && Date.now() - cache.fetchedAt < CACHE_TTL) {
-    return NextResponse.json(cache.data);
+  const cached = cacheMap.get(cacheKey);
+  if (cached && Date.now() - cached.fetchedAt < CACHE_TTL) {
+    return NextResponse.json(cached.data);
   }
 
   if (!isKISConfigured()) {
@@ -106,12 +122,12 @@ export async function GET() {
 
   try {
     const [kospi, kosdaq] = await Promise.all([
-      fetchIndex('0001', 'KOSPI'),
-      fetchIndex('1001', 'KOSDAQ'),
+      fetchIndex('0001', 'KOSPI', validPeriod),
+      fetchIndex('1001', 'KOSDAQ', validPeriod),
     ]);
 
-    const result = { kospi, kosdaq };
-    cache = { data: result, fetchedAt: Date.now() };
+    const result = { kospi, kosdaq, period: validPeriod };
+    cacheMap.set(cacheKey, { data: result, fetchedAt: Date.now() });
     return NextResponse.json(result);
   } catch (error) {
     return NextResponse.json(

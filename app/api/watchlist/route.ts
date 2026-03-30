@@ -213,10 +213,8 @@ export async function GET() {
       await new Promise((r) => setTimeout(r, 80));
     }
 
-    // 3. 편출 처리 (매도 시그널 or 14거래일 경과)
-    // 편출 대상은 응답에 포함하되, sellSignal=true로 표시
-    // 실제 편출은 클라이언트가 확인 후 DELETE 호출 또는 자동 제거
-    savedEntries = savedEntries.filter((e) => !toRemove.includes(e.code));
+    // 3. 매도 시그널 종목은 삭제하지 않고 sellSignal=true로 표시만 유지
+    // 실제 편출은 수동 DELETE 호출로만 처리 (자동 삭제 제거 — 간헐적 종목 소실 버그 방지)
 
     return NextResponse.json({
       settings: savedSettings,
