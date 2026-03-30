@@ -22,7 +22,7 @@ function getRSILabel(rsi: number | null): string {
 
 export default function MarketOverview({ data }: MarketOverviewProps) {
   return (
-    <section className="py-8 px-6">
+    <section className="pt-4 pb-2 px-6">
       <div className="max-w-7xl mx-auto">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-gray-50 rounded-2xl p-6 hover:bg-gray-100 transition-colors">

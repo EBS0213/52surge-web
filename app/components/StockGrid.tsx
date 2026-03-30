@@ -124,12 +124,12 @@ export default function StockGrid({
   );
 
   return (
-    <section className="py-12 px-6">
+    <section className="pt-6 pb-4 px-6">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="flex items-baseline justify-between mb-8">
+        <div className="flex items-baseline justify-between mb-4">
           <div>
-            <h2 className="text-3xl font-bold">워치리스트</h2>
+            <h2 className="text-2xl font-bold">워치리스트</h2>
             <p className="text-gray-500 mt-1">
               총 {data.total_found}개
               {totalPages > 1 && (
@@ -233,7 +233,7 @@ export default function StockGrid({
 
         {/* Dot indicators */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-center gap-2 mt-6">
+          <div className="flex items-center justify-center gap-2 mt-4">
             {Array.from({ length: totalPages }, (_, i) => (
               <button
                 key={i}

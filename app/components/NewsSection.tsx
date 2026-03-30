@@ -251,7 +251,7 @@ export default function NewsSection() {
   // 로딩 스켈레톤
   if (loading) {
     return (
-      <section className="py-12 px-6">
+      <section className="pt-6 pb-4 px-6">
         <div className="max-w-[980px] mx-auto">
           <div className="h-8 w-32 bg-gray-200 rounded mb-6 animate-pulse" />
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -274,7 +274,7 @@ export default function NewsSection() {
   if (totalItems === 0) return null;
 
   return (
-    <section className="py-12 px-6">
+    <section className="pt-6 pb-4 px-6">
       <div className="max-w-[980px] mx-auto">
         {/* 헤더 + 탭 */}
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-6">

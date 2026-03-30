@@ -107,7 +107,7 @@ export default function MarketIndex() {
   // 로딩 중
   if (!data && !error) {
     return (
-      <section className="pt-16 pb-4 px-6">
+      <section className="pt-16 pb-2 px-6">
         <div className="max-w-[980px] mx-auto grid grid-cols-1 md:grid-cols-2 gap-4">
           {[0, 1].map((i) => (
             <div key={i} className="bg-white rounded-2xl p-6 border border-gray-100 animate-pulse">
@@ -127,7 +127,7 @@ export default function MarketIndex() {
   }
 
   return (
-    <section className="pt-16 pb-4 px-6">
+    <section className="pt-16 pb-2 px-6">
       <div className="max-w-[980px] mx-auto grid grid-cols-1 md:grid-cols-2 gap-4">
         <IndexCard data={data.kospi} />
         <IndexCard data={data.kosdaq} />

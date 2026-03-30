@@ -82,8 +82,8 @@ export default function Home() {
       )}
 
       {/* Footer */}
-      <footer className="py-8 px-6 bg-[#f5f5f7]">
-        <div className="max-w-[980px] mx-auto flex items-center justify-between border-t border-gray-200 pt-6">
+      <footer className="py-4 px-6 bg-[#f5f5f7]">
+        <div className="max-w-[980px] mx-auto flex items-center justify-between border-t border-gray-200 pt-4">
           <p className="text-xs text-[#86868b]">
             © 2026 OURTLE. J.Kim of Unimind
           </p>
