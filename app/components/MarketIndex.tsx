@@ -104,12 +104,13 @@ export default function MarketIndex() {
     };
   }, [fetchData]);
 
-  if (error || !data) {
+  // 로딩 중
+  if (!data && !error) {
     return (
       <section className="pt-16 pb-4 px-6">
         <div className="max-w-[980px] mx-auto grid grid-cols-1 md:grid-cols-2 gap-4">
           {[0, 1].map((i) => (
-            <div key={i} className="bg-gray-50 rounded-2xl p-6 animate-pulse">
+            <div key={i} className="bg-white rounded-2xl p-6 border border-gray-100 animate-pulse">
               <div className="h-4 w-16 bg-gray-200 rounded mb-2" />
               <div className="h-8 w-32 bg-gray-200 rounded mb-3" />
               <div className="h-16 bg-gray-100 rounded" />
@@ -118,6 +119,11 @@ export default function MarketIndex() {
         </div>
       </section>
     );
+  }
+
+  // API 에러 시 숨김
+  if (error || !data) {
+    return null;
   }
 
   return (
