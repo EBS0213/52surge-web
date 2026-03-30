@@ -107,9 +107,10 @@ function SettingsPanel({
                 </div>
               ) : (
                 <input
-                  type="number"
+                  type="text"
+                  inputMode="decimal"
                   step={step}
-                  value={toPctDisplay(key, form[key])}
+                  value={toPctDisplay(key, form[key]) || ''}
                   onFocus={(e) => e.target.select()}
                   onChange={(e) => {
                     const raw = e.target.value;
@@ -117,7 +118,10 @@ function SettingsPanel({
                       setForm({ ...form, [key]: 0 });
                       return;
                     }
-                    setForm({ ...form, [key]: fromPctDisplay(key, Number(raw)) });
+                    const num = Number(raw);
+                    if (!isNaN(num)) {
+                      setForm({ ...form, [key]: fromPctDisplay(key, num) });
+                    }
                   }}
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />

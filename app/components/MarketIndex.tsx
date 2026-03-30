@@ -93,8 +93,24 @@ function formatPrice(v: number): string {
 }
 
 /** SVG 캔들차트 + 이동평균선 + Y축 수치 + X축 날짜 */
-function CandleChart({ data, width, height }: { data: CandleData[]; width: number; height: number }) {
-  if (data.length < 3) return null;
+function CandleChart({ data, height }: { data: CandleData[]; height: number }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(500);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setWidth(entry.contentRect.width);
+      }
+    });
+    observer.observe(el);
+    setWidth(el.clientWidth);
+    return () => observer.disconnect();
+  }, []);
+
+  if (data.length < 3) return <div ref={containerRef} />;
 
   const ma5 = calcMA(data, 5);
   const ma10 = calcMA(data, 10);
@@ -144,6 +160,7 @@ function CandleChart({ data, width, height }: { data: CandleData[]; width: numbe
   }
 
   return (
+    <div ref={containerRef} className="w-full">
     <svg width={width} height={height} className="block">
       {/* Y축 가이드라인 (점선) */}
       {yTickValues.map((v, i) => (
@@ -224,6 +241,7 @@ function CandleChart({ data, width, height }: { data: CandleData[]; width: numbe
         <text x={58} y={0} fontSize={8} fill="#a3a3a3">20</text>
       </g>
     </svg>
+    </div>
   );
 }
 
@@ -314,7 +332,7 @@ function IndexCard({ data }: { data: IndexData }) {
 
       {/* 차트 */}
       <div className="px-2">
-        <CandleChart data={displayChart} width={540} height={expanded ? 220 : 170} />
+        <CandleChart data={displayChart} height={expanded ? 220 : 170} />
       </div>
 
       {/* 확장 영역 */}
