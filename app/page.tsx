@@ -25,7 +25,7 @@ export default function Home() {
     useRealtimePrice(stockCodes);
 
   return (
-    <div className="min-h-screen bg-[#f5f5f7]">
+    <div className="min-h-screen bg-[#f5f5f7] pt-12">
       <Navbar lastUpdated={lastUpdated} onRefresh={refresh} />
 
       {/* KOSPI / KOSDAQ 지수 */}
