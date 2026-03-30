@@ -13,14 +13,14 @@ export default function Navbar({ lastUpdated, onRefresh }: NavbarProps) {
 
   const navItems = [
     { href: '/', label: '대시보드' },
-    { href: '/watchlist', label: '워치리스트' },
+    { href: '/watchlist', label: 'Dennis' },
   ];
 
   return (
     <nav className="fixed top-0 w-full bg-white/80 backdrop-blur-xl z-50 border-b border-gray-100">
       <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
         <div className="flex items-center gap-6">
-          <Link href="/" className="text-2xl font-semibold tracking-tight">Unimind</Link>
+          <Link href="/" className="text-2xl font-semibold tracking-tight">OURTLE</Link>
           <div className="flex items-center gap-1 bg-gray-100 rounded-full p-1">
             {navItems.map(({ href, label }) => (
               <Link

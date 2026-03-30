@@ -88,7 +88,10 @@ export default function Home() {
       <footer className="py-12 px-6 border-t border-gray-100">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <p className="text-sm text-gray-400">
-            © 2026 Unimind. 시가총액 상위 1,000개 종목 분석.
+            © 2026 OURTLE. 시가총액 상위 1,000개 종목 분석.
+          </p>
+          <p className="text-xs text-gray-300">
+            Unimind · 개발자: J.Kim
           </p>
           {lastUpdated && (
             <p className="text-xs text-gray-300">

@@ -347,13 +347,13 @@ export default function WatchlistPage() {
       <nav className="fixed top-0 w-full bg-white/80 backdrop-blur-xl z-50 border-b border-gray-100">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-6">
-            <Link href="/" className="text-2xl font-semibold tracking-tight">Unimind</Link>
+            <Link href="/" className="text-2xl font-semibold tracking-tight">OURTLE</Link>
             <div className="flex items-center gap-1 bg-gray-100 rounded-full p-1">
               <Link href="/" className="text-sm px-4 py-1.5 rounded-full text-gray-600 hover:bg-white transition-colors">
                 대시보드
               </Link>
               <span className="text-sm px-4 py-1.5 rounded-full bg-black text-white">
-                워치리스트
+                Dennis
               </span>
             </div>
           </div>
@@ -379,8 +379,9 @@ export default function WatchlistPage() {
           <div className="flex items-start justify-between">
             <div>
               <h1 className="text-3xl md:text-4xl font-bold tracking-tight mb-2 bg-gradient-to-br from-gray-900 to-gray-600 bg-clip-text text-transparent">
-                터틀 트레이딩 워치리스트
+                Dennis
               </h1>
+              <p className="text-xs text-gray-400 mb-1">터틀 트레이딩 워치리스트</p>
               <p className="text-gray-500">
                 시스템 1·2 기준 자동 편입 — N값·유닛·손절가 실시간 계산
               </p>
@@ -452,7 +453,10 @@ export default function WatchlistPage() {
       <footer className="py-8 px-6 border-t border-gray-100">
         <div className="max-w-7xl mx-auto text-center">
           <p className="text-sm text-gray-400">
-            © 2026 Unimind. 터틀 트레이딩 시스템 기반 워치리스트.
+            © 2026 OURTLE. 터틀 트레이딩 시스템 기반 워치리스트.
+          </p>
+          <p className="text-xs text-gray-300 mt-1">
+            Unimind · 개발자: J.Kim
           </p>
         </div>
       </footer>
