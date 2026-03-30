@@ -63,14 +63,30 @@ function SettingsPanel({
     );
   }
 
-  const fields: { key: keyof TurtleSettings; label: string; step?: string; suffix?: string }[] = [
+  // % 변환이 필요한 필드: 저장은 0.02, 표시는 2(%)
+  const pctKeys = new Set<keyof TurtleSettings>(['riskPct', 'stopPct', 'winRate']);
+
+  const toPctDisplay = (key: keyof TurtleSettings, val: number) =>
+    pctKeys.has(key) ? Math.round(val * 10000) / 100 : val;
+  const fromPctDisplay = (key: keyof TurtleSettings, val: number) =>
+    pctKeys.has(key) ? val / 100 : val;
+
+  type FieldDef = {
+    key: keyof TurtleSettings;
+    label: string;
+    step?: string;
+    suffix?: string;
+    fixed?: boolean;
+  };
+
+  const fields: FieldDef[] = [
     { key: 'accountTotal', label: '계좌총액', step: '1000000', suffix: '원' },
-    { key: 'riskPct', label: 'R (리스크 비율)', step: '0.005', suffix: '' },
-    { key: 'stopPct', label: '손절 비율', step: '0.01', suffix: '' },
-    { key: 'winRate', label: '승률', step: '0.05', suffix: '' },
-    { key: 'marketCondition', label: '시장장세', step: '1' },
+    { key: 'riskPct', label: 'R (리스크 비율)', step: '1', suffix: '%' },
+    { key: 'stopPct', label: '손절 비율', step: '1', suffix: '%' },
+    { key: 'winRate', label: '승률', step: '5', suffix: '%' },
+    { key: 'marketCondition', label: '시장장세', step: '1', fixed: true },
     { key: 'currentMarket', label: '현재시장', step: '1' },
-    { key: 'maxUnits', label: '최대 유닛', step: '1' },
+    { key: 'maxUnits', label: 'UNIT', step: '1', fixed: true },
     { key: 'deployedUnits', label: '투입유닛', step: '1' },
   ];
 
@@ -81,17 +97,31 @@ function SettingsPanel({
         <button onClick={() => setOpen(false)} className="text-gray-400 hover:text-black text-xl">×</button>
       </div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {fields.map(({ key, label, step, suffix }) => (
+        {fields.map(({ key, label, step, suffix, fixed }) => (
           <div key={key}>
             <label className="block text-xs text-gray-500 mb-1">{label}</label>
             <div className="flex items-center gap-1">
-              <input
-                type="number"
-                step={step}
-                value={form[key]}
-                onChange={(e) => setForm({ ...form, [key]: Number(e.target.value) })}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
+              {fixed ? (
+                <div className="w-full border border-gray-100 bg-gray-50 rounded-lg px-3 py-2 text-sm text-gray-500">
+                  {form[key]}
+                </div>
+              ) : (
+                <input
+                  type="number"
+                  step={step}
+                  value={toPctDisplay(key, form[key])}
+                  onFocus={(e) => e.target.select()}
+                  onChange={(e) => {
+                    const raw = e.target.value;
+                    if (raw === '' || raw === '-') {
+                      setForm({ ...form, [key]: 0 });
+                      return;
+                    }
+                    setForm({ ...form, [key]: fromPctDisplay(key, Number(raw)) });
+                  }}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              )}
               {suffix && <span className="text-xs text-gray-400 whitespace-nowrap">{suffix}</span>}
             </div>
           </div>
@@ -461,13 +491,13 @@ export default function WatchlistPage() {
     <div className="min-h-screen bg-[#f5f5f7]">
       {/* 네비게이션 — Apple 스타일 */}
       <nav className="fixed top-0 w-full bg-[#1d1d1f]/95 backdrop-blur-xl z-50">
-        <div className="max-w-[980px] mx-auto px-6 h-11 flex items-center justify-between">
+        <div className="max-w-[980px] mx-auto px-6 h-11 flex items-center">
           <Link href="/" className="text-white text-xl font-semibold tracking-tight">OURTLE</Link>
-          <div className="flex items-center gap-7">
-            <Link href="/" className="text-xs tracking-wide text-[#d1d1d6] hover:text-white transition-colors">Home</Link>
-            <span className="text-xs tracking-wide text-white">Dennis</span>
+          <div className="flex items-center gap-7 ml-8">
+            <Link href="/" className="text-xs tracking-wide text-white/70 hover:text-white transition-colors">Home</Link>
+            <span className="text-xs tracking-wide text-white font-medium">Dennis</span>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 ml-auto">
             {data?.lastUpdated && (
               <span className="text-[10px] text-[#86868b]">
                 {new Date(data.lastUpdated).toLocaleTimeString('ko-KR')}
