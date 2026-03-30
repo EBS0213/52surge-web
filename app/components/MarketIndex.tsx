@@ -76,7 +76,23 @@ function stateColor(s: MarketState) {
   return { bg: 'bg-gray-50', text: 'text-gray-600', border: 'border-gray-200', dot: 'bg-gray-400' };
 }
 
-/** SVG 캔들차트 + 이동평균선 */
+/** 날짜 포맷 */
+function formatDateLabel(dateStr: string): string {
+  // dateStr: "20260330" 형태
+  if (dateStr.length !== 8) return dateStr;
+  const m = dateStr.slice(4, 6);
+  const d = dateStr.slice(6, 8);
+  return `${Number(m)}/${Number(d)}`;
+}
+
+/** Y축 가격 포맷 */
+function formatPrice(v: number): string {
+  if (v >= 10000) return v.toFixed(0);
+  if (v >= 1000) return v.toFixed(1);
+  return v.toFixed(2);
+}
+
+/** SVG 캔들차트 + 이동평균선 + Y축 수치 + X축 날짜 */
 function CandleChart({ data, width, height }: { data: CandleData[]; width: number; height: number }) {
   if (data.length < 3) return null;
 
@@ -84,7 +100,7 @@ function CandleChart({ data, width, height }: { data: CandleData[]; width: numbe
   const ma10 = calcMA(data, 10);
   const ma20 = calcMA(data, 20);
 
-  const padding = { top: 8, bottom: 20, left: 4, right: 4 };
+  const padding = { top: 8, bottom: 28, left: 4, right: 52 };
   const chartW = width - padding.left - padding.right;
   const chartH = height - padding.top - padding.bottom;
 
@@ -113,8 +129,33 @@ function CandleChart({ data, width, height }: { data: CandleData[]; width: numbe
     return path;
   };
 
+  // Y축 눈금 (4~5개)
+  const yTicks = 5;
+  const yTickValues: number[] = [];
+  for (let i = 0; i < yTicks; i++) {
+    yTickValues.push(allMin + (range * i) / (yTicks - 1));
+  }
+
+  // X축 날짜 라벨 (5~7개 균등 배치)
+  const xLabelCount = Math.min(6, data.length);
+  const xLabelIndices: number[] = [];
+  for (let i = 0; i < xLabelCount; i++) {
+    xLabelIndices.push(Math.round((i * (data.length - 1)) / (xLabelCount - 1)));
+  }
+
   return (
     <svg width={width} height={height} className="block">
+      {/* Y축 가이드라인 (점선) */}
+      {yTickValues.map((v, i) => (
+        <line
+          key={`yg-${i}`}
+          x1={padding.left} y1={toY(v)}
+          x2={padding.left + chartW} y2={toY(v)}
+          stroke="#f0f0f0" strokeWidth={0.8} strokeDasharray="3,3"
+        />
+      ))}
+
+      {/* 캔들 */}
       {data.map((d, i) => {
         const isUp = d.close >= d.open;
         const color = isUp ? '#ef4444' : '#3b82f6';
@@ -140,11 +181,41 @@ function CandleChart({ data, width, height }: { data: CandleData[]; width: numbe
         );
       })}
 
+      {/* 이동평균선 */}
       <path d={maLine(ma5)} fill="none" stroke="#f59e0b" strokeWidth={1.2} strokeLinejoin="round" opacity={0.9} />
       <path d={maLine(ma10)} fill="none" stroke="#8b5cf6" strokeWidth={1.2} strokeLinejoin="round" opacity={0.9} />
       <path d={maLine(ma20)} fill="none" stroke="#06b6d4" strokeWidth={1.2} strokeLinejoin="round" opacity={0.9} />
 
-      <g transform={`translate(${padding.left + 4}, ${height - 6})`}>
+      {/* Y축 가격 수치 (오른쪽) */}
+      {yTickValues.map((v, i) => (
+        <text
+          key={`yt-${i}`}
+          x={padding.left + chartW + 6}
+          y={toY(v) + 3}
+          fontSize={9}
+          fill="#a3a3a3"
+          textAnchor="start"
+        >
+          {formatPrice(v)}
+        </text>
+      ))}
+
+      {/* X축 날짜 (하단) */}
+      {xLabelIndices.map((idx) => (
+        <text
+          key={`xl-${idx}`}
+          x={toX(idx)}
+          y={height - 4}
+          fontSize={9}
+          fill="#a3a3a3"
+          textAnchor="middle"
+        >
+          {formatDateLabel(data[idx].date)}
+        </text>
+      ))}
+
+      {/* MA 범례 (좌하단) */}
+      <g transform={`translate(${padding.left + 4}, ${height - padding.bottom - 4})`}>
         <circle cx={0} cy={-3} r={3} fill="#f59e0b" />
         <text x={6} y={0} fontSize={8} fill="#a3a3a3">5</text>
         <circle cx={24} cy={-3} r={3} fill="#8b5cf6" />
@@ -156,24 +227,19 @@ function CandleChart({ data, width, height }: { data: CandleData[]; width: numbe
   );
 }
 
-/** 단일 지수 카드 */
-function IndexCard({
-  data,
-  expanded,
-  onToggle,
-  selectedPeriod,
-  onPeriodChange,
-  periodData,
-  periodLoading,
-}: {
-  data: IndexData;
-  expanded: boolean;
-  onToggle: () => void;
-  selectedPeriod: PeriodKey;
-  onPeriodChange: (p: PeriodKey) => void;
-  periodData: IndexData | null;
-  periodLoading: boolean;
-}) {
+/** 단일 지수 카드 (독립적 상태 관리) */
+function IndexCard({ data }: { data: IndexData }) {
+  const [expanded, setExpanded] = useState(false);
+  const [selectedPeriod, setSelectedPeriod] = useState<PeriodKey>('3m');
+  const [periodChartData, setPeriodChartData] = useState<IndexData | null>(null);
+  const [periodLoading, setPeriodLoading] = useState(false);
+  const isMounted = useRef(true);
+
+  useEffect(() => {
+    isMounted.current = true;
+    return () => { isMounted.current = false; };
+  }, []);
+
   const isUp = data.change >= 0;
   const arrow = isUp ? '▲' : '▼';
   const sign = isUp ? '+' : '';
@@ -182,14 +248,45 @@ function IndexCard({
   const { state, ma5, ma10, ma20 } = getMarketState(data.chart);
   const sc = stateColor(state);
 
-  // 기간별 데이터가 있으면 해당 차트를 보여줌
-  const displayChart = expanded && periodData ? periodData.chart : chartData;
-  const displayMA = expanded && periodData ? getMarketState(periodData.chart) : { ma5, ma10, ma20 };
+  const displayChart = expanded && periodChartData ? periodChartData.chart : chartData;
+  const displayMA = expanded && periodChartData ? getMarketState(periodChartData.chart) : { ma5, ma10, ma20 };
+
+  const handleToggle = useCallback(() => {
+    setExpanded(prev => !prev);
+    if (expanded) {
+      // 접을 때 기간 리셋
+      setSelectedPeriod('3m');
+      setPeriodChartData(null);
+    }
+  }, [expanded]);
+
+  const handlePeriodChange = useCallback(async (period: PeriodKey) => {
+    setSelectedPeriod(period);
+    if (period === '3m') {
+      setPeriodChartData(null);
+      return;
+    }
+    setPeriodLoading(true);
+    try {
+      const res = await fetch(`/api/market?period=${period}`);
+      if (!res.ok) throw new Error('fetch failed');
+      const result = await res.json();
+      if (isMounted.current) {
+        // data.code로 해당 인덱스만 추출
+        const target = data.code === '0001' ? result.kospi : result.kosdaq;
+        setPeriodChartData(target);
+      }
+    } catch {
+      // 실패 시 유지
+    } finally {
+      if (isMounted.current) setPeriodLoading(false);
+    }
+  }, [data.code]);
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 hover:shadow-md transition-shadow overflow-hidden">
-      {/* Header - 클릭 가능 */}
-      <div className="p-5 pb-0 cursor-pointer" onClick={onToggle}>
+      {/* Header */}
+      <div className="p-5 pb-0 cursor-pointer" onClick={handleToggle}>
         <div className="flex items-center justify-between mb-1">
           <div className="flex items-center gap-3">
             <span className="text-base font-semibold text-gray-800">{data.name}</span>
@@ -215,12 +312,12 @@ function IndexCard({
         </div>
       </div>
 
-      {/* 기본 차트 (항상 표시) */}
+      {/* 차트 */}
       <div className="px-2">
-        <CandleChart data={displayChart} width={540} height={expanded ? 200 : 160} />
+        <CandleChart data={displayChart} width={540} height={expanded ? 220 : 170} />
       </div>
 
-      {/* 확장 영역: 기간 선택 탭 + MA 정보 */}
+      {/* 확장 영역 */}
       {expanded && (
         <div className="border-t border-gray-100">
           {/* 기간 선택 탭 */}
@@ -228,7 +325,7 @@ function IndexCard({
             {PERIOD_LABELS.map(({ key, label }) => (
               <button
                 key={key}
-                onClick={(e) => { e.stopPropagation(); onPeriodChange(key); }}
+                onClick={(e) => { e.stopPropagation(); handlePeriodChange(key); }}
                 className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${
                   selectedPeriod === key
                     ? 'bg-gray-900 text-white'
@@ -269,12 +366,6 @@ export default function MarketIndex() {
   const [error, setError] = useState(false);
   const isMounted = useRef(true);
 
-  // 확장 상태
-  const [expandedIndex, setExpandedIndex] = useState<'kospi' | 'kosdaq' | null>(null);
-  const [selectedPeriod, setSelectedPeriod] = useState<PeriodKey>('3m');
-  const [periodData, setPeriodData] = useState<MarketData | null>(null);
-  const [periodLoading, setPeriodLoading] = useState(false);
-
   const fetchData = useCallback(async () => {
     try {
       const res = await fetch('/api/market');
@@ -289,26 +380,6 @@ export default function MarketIndex() {
     }
   }, []);
 
-  // 기간별 데이터 fetch
-  const fetchPeriodData = useCallback(async (period: PeriodKey) => {
-    if (period === '3m') {
-      // 기본 데이터와 동일하므로 별도 fetch 불필요
-      setPeriodData(null);
-      return;
-    }
-    setPeriodLoading(true);
-    try {
-      const res = await fetch(`/api/market?period=${period}`);
-      if (!res.ok) throw new Error('fetch failed');
-      const result = await res.json();
-      if (isMounted.current) setPeriodData(result);
-    } catch {
-      // 실패 시 기본 데이터 유지
-    } finally {
-      if (isMounted.current) setPeriodLoading(false);
-    }
-  }, []);
-
   useEffect(() => {
     isMounted.current = true;
     fetchData();
@@ -319,23 +390,6 @@ export default function MarketIndex() {
     };
   }, [fetchData]);
 
-  // 기간 변경 시 데이터 fetch
-  const handlePeriodChange = useCallback((period: PeriodKey) => {
-    setSelectedPeriod(period);
-    fetchPeriodData(period);
-  }, [fetchPeriodData]);
-
-  const handleToggle = useCallback((index: 'kospi' | 'kosdaq') => {
-    setExpandedIndex(prev => {
-      if (prev === index) return null; // 접기
-      return index; // 펼치기
-    });
-    // 다른 인덱스 선택 시 기간을 기본값으로 리셋
-    setSelectedPeriod('3m');
-    setPeriodData(null);
-  }, []);
-
-  // 로딩 중
   if (!data && !error) {
     return (
       <section className="pt-4 pb-2 px-6">
@@ -352,7 +406,6 @@ export default function MarketIndex() {
     );
   }
 
-  // API 에러
   if (error || !data) {
     return (
       <section className="pt-4 pb-2 px-6">
@@ -370,24 +423,8 @@ export default function MarketIndex() {
   return (
     <section className="pt-4 pb-2 px-6">
       <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-4">
-        <IndexCard
-          data={data.kospi}
-          expanded={expandedIndex === 'kospi'}
-          onToggle={() => handleToggle('kospi')}
-          selectedPeriod={selectedPeriod}
-          onPeriodChange={handlePeriodChange}
-          periodData={expandedIndex === 'kospi' && periodData ? periodData.kospi : null}
-          periodLoading={periodLoading && expandedIndex === 'kospi'}
-        />
-        <IndexCard
-          data={data.kosdaq}
-          expanded={expandedIndex === 'kosdaq'}
-          onToggle={() => handleToggle('kosdaq')}
-          selectedPeriod={selectedPeriod}
-          onPeriodChange={handlePeriodChange}
-          periodData={expandedIndex === 'kosdaq' && periodData ? periodData.kosdaq : null}
-          periodLoading={periodLoading && expandedIndex === 'kosdaq'}
-        />
+        <IndexCard data={data.kospi} />
+        <IndexCard data={data.kosdaq} />
       </div>
     </section>
   );
