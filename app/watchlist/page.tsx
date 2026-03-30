@@ -42,7 +42,7 @@ function SettingsPanel({
         onClick={() => { setForm(settings); setOpen(true); }}
         className="text-sm text-gray-500 hover:text-black transition-colors border border-gray-200 rounded-lg px-4 py-2"
       >
-        ⚙ 설정
+        ⚙ 계산기
       </button>
     );
   }
@@ -198,7 +198,7 @@ function StockRow({
           </span>
         ) : (
           <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
-            보유
+            편입
           </span>
         )}
       </td>

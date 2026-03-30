@@ -1,5 +1,5 @@
 /**
- * KOSPI / KOSDAQ 지수 현재가 + 일봉 차트 API
+ * KOSPI / KOSDAQ 지수 현재가 + 일봉 OHLC 차트 API
  * KIS OpenAPI: 국내 주식 업종 기간별 시세 (FHKUP03500100)
  */
 
@@ -14,13 +14,21 @@ const APP_SECRET = process.env.KIS_APP_SECRET || '';
 let cache: { data: unknown; fetchedAt: number } | null = null;
 const CACHE_TTL = 5 * 60 * 1000;
 
+interface CandleData {
+  date: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+}
+
 interface IndexData {
   name: string;
   code: string;
   price: number;
   change: number;
   changeRate: number;
-  chart: { date: string; close: number }[];
+  chart: CandleData[];
 }
 
 async function fetchIndex(code: string, name: string): Promise<IndexData> {
@@ -62,9 +70,12 @@ async function fetchIndex(code: string, name: string): Promise<IndexData> {
   const output1 = data.output1 || {};
   const output2 = (data.output2 || []) as Record<string, string>[];
 
-  const chart = output2
+  const chart: CandleData[] = output2
     .map((item) => ({
       date: item.stck_bsop_date,
+      open: Number(item.bstp_nmix_oprc) || Number(item.bstp_nmix_prpr),
+      high: Number(item.bstp_nmix_hgpr) || Number(item.bstp_nmix_prpr),
+      low: Number(item.bstp_nmix_lwpr) || Number(item.bstp_nmix_prpr),
       close: Number(item.bstp_nmix_prpr),
     }))
     .filter((c) => c.close > 0)
