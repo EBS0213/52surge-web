@@ -306,6 +306,25 @@ export async function GET(request: Request) {
         const items = await fetchKcifReports();
         return NextResponse.json({ items, tab });
       }
+      case 'korea': {
+        const hasSerpKey = !!getSerpKey();
+        const [rss, naver, kcif] = await Promise.all([
+          fetchRssNews(),
+          hasSerpKey ? fetchNaverNews() : Promise.resolve([]),
+          hasSerpKey ? fetchKcifReports() : Promise.resolve([]),
+        ]);
+        const combined = dedup(sortByDate([...rss, ...naver, ...kcif])).slice(0, 20);
+        return NextResponse.json({ items: combined, tab: 'korea' });
+      }
+      case 'worldwide': {
+        const hasSerpKey = !!getSerpKey();
+        const [google, baidu] = await Promise.all([
+          hasSerpKey ? fetchGoogleNews() : Promise.resolve([]),
+          hasSerpKey ? fetchBaiduNews() : Promise.resolve([]),
+        ]);
+        const combined = dedup([...google, ...baidu]).slice(0, 15);
+        return NextResponse.json({ items: combined, tab: 'worldwide' });
+      }
       case 'all': {
         const hasSerpKey = !!getSerpKey();
         const [rss, naver, google, baidu, kcif] = await Promise.all([
@@ -315,12 +334,11 @@ export async function GET(request: Request) {
           hasSerpKey ? fetchBaiduNews() : Promise.resolve([]),
           hasSerpKey ? fetchKcifReports() : Promise.resolve([]),
         ]);
+        const korea = dedup(sortByDate([...rss, ...naver, ...kcif])).slice(0, 20);
+        const worldwide = dedup([...google, ...baidu]).slice(0, 15);
         return NextResponse.json({
-          domestic: rss,
-          naver,
-          global: google,
-          china: baidu,
-          kcif,
+          korea,
+          worldwide,
           hasSerpKey,
           tab: 'all',
         });
