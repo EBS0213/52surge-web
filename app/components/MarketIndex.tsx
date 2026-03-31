@@ -85,13 +85,21 @@ function stateColor(s: MarketState) {
   return { bg: 'bg-gray-50', text: 'text-gray-600', border: 'border-gray-200', dot: 'bg-gray-400' };
 }
 
-/** 날짜 포맷 */
+/** 날짜 포맷 (일봉: "20260330" → "3/30", 분봉: "0930" or "093000" → "09:30") */
 function formatDateLabel(dateStr: string): string {
-  // dateStr: "20260330" 형태
-  if (dateStr.length !== 8) return dateStr;
-  const m = dateStr.slice(4, 6);
-  const d = dateStr.slice(6, 8);
-  return `${Number(m)}/${Number(d)}`;
+  // 분봉 시간 형식: "0930", "1000", "093000", "100000"
+  if (dateStr.length <= 6 && /^\d{4,6}$/.test(dateStr)) {
+    const hh = dateStr.slice(0, 2);
+    const mm = dateStr.slice(2, 4);
+    return `${hh}:${mm}`;
+  }
+  // 일봉 날짜 형식: "20260330"
+  if (dateStr.length === 8) {
+    const m = dateStr.slice(4, 6);
+    const d = dateStr.slice(6, 8);
+    return `${Number(m)}/${Number(d)}`;
+  }
+  return dateStr;
 }
 
 /** Y축 가격 포맷 */

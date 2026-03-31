@@ -1,6 +1,7 @@
 /**
- * KOSPI / KOSDAQ 지수 현재가 + 일봉 OHLC 차트 API
- * KIS OpenAPI: 국내 주식 업종 기간별 시세 (FHKUP03500100)
+ * KOSPI / KOSDAQ 지수 현재가 + 차트 API
+ * - 1일: 10분봉 (FHKUP03500200 업종 시간별 시세)
+ * - 기타: 일/주/월봉 (FHKUP03500100 업종 기간별 시세)
  */
 
 import { NextResponse, type NextRequest } from 'next/server';
@@ -10,19 +11,18 @@ const BASE_URL = process.env.KIS_BASE_URL || 'https://openapi.koreainvestment.co
 const APP_KEY = process.env.KIS_APP_KEY || '';
 const APP_SECRET = process.env.KIS_APP_SECRET || '';
 
-// 캐시 (5분) - 기간별 캐시
+// 캐시 - 기간별 캐시
 const cacheMap = new Map<string, { data: unknown; fetchedAt: number }>();
 const CACHE_TTL = 1 * 60 * 1000; // 1분
 
-// 기간 설정
+// 기간 설정 (1d는 별도 로직)
 type PeriodKey = '1d' | '1w' | '1m' | '3m' | '1y' | '3y';
-const PERIOD_CONFIG: Record<PeriodKey, { days: number; periodCode: string }> = {
-  '1d': { days: 5, periodCode: 'D' },     // 1일 (최근 5거래일 일봉)
-  '1w': { days: 14, periodCode: 'D' },    // 1주 (여유있게 14일 일봉)
-  '1m': { days: 35, periodCode: 'D' },    // 1개월 일봉
-  '3m': { days: 90, periodCode: 'D' },    // 3개월 일봉
-  '1y': { days: 365, periodCode: 'W' },   // 1년 주봉
-  '3y': { days: 1095, periodCode: 'M' },  // 3년 월봉
+const PERIOD_CONFIG: Record<string, { days: number; periodCode: string }> = {
+  '1w': { days: 14, periodCode: 'D' },
+  '1m': { days: 35, periodCode: 'D' },
+  '3m': { days: 90, periodCode: 'D' },
+  '1y': { days: 365, periodCode: 'W' },
+  '3y': { days: 1095, periodCode: 'M' },
 };
 
 interface CandleData {
@@ -42,7 +42,128 @@ interface IndexData {
   chart: CandleData[];
 }
 
+/** 1분봉 → 10분봉 합산 */
+function aggregateTo10Min(minutes: CandleData[]): CandleData[] {
+  if (minutes.length === 0) return [];
+  const buckets = new Map<string, CandleData>();
+
+  for (const m of minutes) {
+    // date: "HHMMSS" 형태 → 10분 단위 키
+    const hh = m.date.slice(0, 2);
+    const mm = m.date.slice(2, 4);
+    const bucket = `${hh}${String(Math.floor(Number(mm) / 10) * 10).padStart(2, '0')}`;
+
+    const existing = buckets.get(bucket);
+    if (!existing) {
+      buckets.set(bucket, { date: bucket, open: m.open, high: m.high, low: m.low, close: m.close });
+    } else {
+      existing.high = Math.max(existing.high, m.high);
+      existing.low = Math.min(existing.low, m.low);
+      existing.close = m.close; // 마지막 분봉의 종가
+    }
+  }
+
+  return Array.from(buckets.values()).sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/** 업종 시간별 시세 (1분봉) — 반복 호출로 전체 장중 데이터 수집 */
+async function fetchIndexIntraday(code: string, name: string): Promise<IndexData> {
+  const token = await getAccessToken();
+
+  const makeHeaders = (): Record<string, string> => ({
+    'Content-Type': 'application/json; charset=utf-8',
+    authorization: `Bearer ${token}`,
+    appkey: APP_KEY,
+    appsecret: APP_SECRET,
+    tr_id: 'FHKUP03500200',
+    custtype: 'P',
+  });
+
+  const allMinutes: CandleData[] = [];
+  let latestPrice = 0;
+  let change = 0;
+  let changeRate = 0;
+
+  // 시간대별로 여러 번 호출 (30건씩, 큰 시간→작은 시간 순)
+  // 장 시간: 09:00 ~ 15:30, 10분봉이므로 대략 40개 → 1분봉 약 390개 → 13회 호출 필요
+  // API 부담 줄이기 위해 주요 시간대만 호출 (6회)
+  const timeSlots = ['153000', '140000', '123000', '113000', '100000', '090000'];
+
+  for (const time of timeSlots) {
+    try {
+      const params = new URLSearchParams({
+        FID_COND_MRKT_DIV_CODE: 'U',
+        FID_INPUT_ISCD: code,
+        FID_INPUT_HOUR_1: time,
+        FID_PW_DATA_INCU_YN: 'N',
+      });
+
+      const res = await fetch(
+        `${BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-time-indexchartprice?${params}`,
+        { headers: makeHeaders(), cache: 'no-store' }
+      );
+
+      if (!res.ok) continue;
+      const data = await res.json();
+
+      // output1에서 현재가 정보 (첫 호출에서만)
+      if (latestPrice === 0 && data.output1) {
+        latestPrice = Number(data.output1.bstp_nmix_prpr) || 0;
+        change = Number(data.output1.bstp_nmix_prdy_vrss) || 0;
+        changeRate = Number(data.output1.bstp_nmix_prdy_ctrt) || 0;
+      }
+
+      const items = (data.output2 || []) as Record<string, string>[];
+      for (const item of items) {
+        const time = item.stck_cntg_hour || item.bsop_hour;
+        if (!time) continue;
+        const close = Number(item.bstp_nmix_prpr);
+        if (close <= 0) continue;
+
+        allMinutes.push({
+          date: time,
+          open: Number(item.bstp_nmix_oprc) || close,
+          high: Number(item.bstp_nmix_hgpr) || close,
+          low: Number(item.bstp_nmix_lwpr) || close,
+          close,
+        });
+      }
+
+      // API rate limit
+      await new Promise((r) => setTimeout(r, 100));
+    } catch {
+      // 개별 시간대 실패 무시
+    }
+  }
+
+  // 중복 제거 (같은 시간대 데이터) + 정렬
+  const seen = new Set<string>();
+  const unique = allMinutes.filter((m) => {
+    if (seen.has(m.date)) return false;
+    seen.add(m.date);
+    return true;
+  });
+
+  // 10분봉으로 합산
+  const chart = aggregateTo10Min(unique);
+
+  return {
+    name,
+    code,
+    price: latestPrice || (chart.length > 0 ? chart[chart.length - 1].close : 0),
+    change,
+    changeRate,
+    chart,
+  };
+}
+
+/** 업종 기간별 시세 (일/주/월봉) */
 async function fetchIndex(code: string, name: string, periodKey: PeriodKey = '3m'): Promise<IndexData> {
+  // 1일 → 분봉 전용 함수
+  if (periodKey === '1d') {
+    return fetchIndexIntraday(code, name);
+  }
+
   const token = await getAccessToken();
   const headers: Record<string, string> = {
     'Content-Type': 'application/json; charset=utf-8',
