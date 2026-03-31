@@ -36,20 +36,23 @@ const DEFAULT_FILTERS: FilterState = {
   tradingValueMin: 0,
 };
 
-/** 필터 패널 */
+/** 필터 패널 — Enter키 또는 적용 버튼으로 필터 적용 */
 function FilterPanel({
   filters,
-  onChange,
+  onApply,
   onReset,
   matchCount,
   totalCount,
 }: {
   filters: FilterState;
-  onChange: (f: FilterState) => void;
+  onApply: (f: FilterState) => void;
   onReset: () => void;
   matchCount: number;
   totalCount: number;
 }) {
+  // 로컬 draft 상태 (적용 전까지 부모에 전달 안 함)
+  const [draft, setDraft] = useState<FilterState>(filters);
+
   const inputClass =
     'w-full px-2 py-1.5 bg-white border border-gray-200 rounded-lg text-sm text-center focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent';
 
@@ -59,30 +62,45 @@ function FilterPanel({
     filters.volumeChangeMin === 0 &&
     filters.tradingValueMin === 0;
 
+  const handleApply = () => {
+    onApply(draft);
+  };
+
+  const handleReset = () => {
+    setDraft(DEFAULT_FILTERS);
+    onReset();
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleApply();
+    }
+  };
+
   return (
-    <div className="bg-white rounded-2xl border border-gray-200 p-4 mb-4">
+    <div className="bg-white rounded-2xl border border-gray-200 p-4 mb-4" onKeyDown={handleKeyDown}>
       <div className="flex items-center justify-between mb-3">
         <span className="text-sm font-medium text-gray-700">
           필터 적용 중: <span className="font-semibold text-gray-900">{matchCount}</span>
           <span className="text-gray-400">/{totalCount}</span>
         </span>
         {!isDefault && (
-          <button onClick={onReset} className="text-xs text-gray-400 hover:text-gray-600 transition-colors">
+          <button onClick={handleReset} className="text-xs text-gray-400 hover:text-gray-600 transition-colors">
             초기화
           </button>
         )}
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {/* RSI 범위 */}
         <div>
           <label className="block text-xs text-gray-500 mb-1">RSI 최소</label>
           <input
             className={inputClass}
             type="text"
             inputMode="numeric"
-            value={filters.rsiMin || ''}
-            onChange={(e) => onChange({ ...filters, rsiMin: Number(e.target.value) || 0 })}
+            value={draft.rsiMin || ''}
+            onChange={(e) => setDraft({ ...draft, rsiMin: Number(e.target.value) || 0 })}
             placeholder="0"
           />
         </div>
@@ -92,37 +110,43 @@ function FilterPanel({
             className={inputClass}
             type="text"
             inputMode="numeric"
-            value={filters.rsiMax === 100 ? '' : filters.rsiMax}
-            onChange={(e) => onChange({ ...filters, rsiMax: Number(e.target.value) || 100 })}
+            value={draft.rsiMax === 100 ? '' : draft.rsiMax}
+            onChange={(e) => setDraft({ ...draft, rsiMax: Number(e.target.value) || 100 })}
             placeholder="100"
           />
         </div>
-
-        {/* 거래량 변화율 */}
         <div>
           <label className="block text-xs text-gray-500 mb-1">거래량 변화율 (% 이상)</label>
           <input
             className={inputClass}
             type="text"
             inputMode="decimal"
-            value={filters.volumeChangeMin || ''}
-            onChange={(e) => onChange({ ...filters, volumeChangeMin: Number(e.target.value) || 0 })}
+            value={draft.volumeChangeMin || ''}
+            onChange={(e) => setDraft({ ...draft, volumeChangeMin: Number(e.target.value) || 0 })}
             placeholder="0"
           />
         </div>
-
-        {/* 거래대금 */}
         <div>
           <label className="block text-xs text-gray-500 mb-1">거래대금 (억 이상)</label>
           <input
             className={inputClass}
             type="text"
             inputMode="numeric"
-            value={filters.tradingValueMin || ''}
-            onChange={(e) => onChange({ ...filters, tradingValueMin: Number(e.target.value) || 0 })}
+            value={draft.tradingValueMin || ''}
+            onChange={(e) => setDraft({ ...draft, tradingValueMin: Number(e.target.value) || 0 })}
             placeholder="0"
           />
         </div>
+      </div>
+
+      {/* 적용 버튼 */}
+      <div className="mt-3 flex justify-end">
+        <button
+          onClick={handleApply}
+          className="px-6 py-2 bg-gray-900 text-white text-sm font-semibold rounded-full hover:bg-gray-800 transition-colors"
+        >
+          신고가
+        </button>
       </div>
     </div>
   );
@@ -332,7 +356,7 @@ export default function StockGrid({
         {showFilter && (
           <FilterPanel
             filters={filters}
-            onChange={handleFilterChange}
+            onApply={handleFilterChange}
             onReset={() => handleFilterChange(DEFAULT_FILTERS)}
             matchCount={stocks.length}
             totalCount={data.total_found}
