@@ -108,6 +108,17 @@ export interface WatchlistEntry {
   entryPrice: number;
 }
 
+/** 아카이브 엔트리 (편출 후 3주 보관) */
+export interface ArchivedEntry {
+  code: string;
+  name: string;
+  system: TurtleSystem;
+  entryDate: string;          // 원래 편입일
+  entryPrice: number;         // 원래 편입가
+  archivedAt: string;         // 아카이브 날짜 (YYYY-MM-DD)
+  sellReason: string;         // 편출 사유
+}
+
 // ── 트레이드 기록 (매매일지) ──
 
 /** 매도 유형 */

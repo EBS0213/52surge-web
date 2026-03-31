@@ -50,6 +50,6 @@ EOF
 echo ""
 echo "=============================="
 echo "  🎉 배포 완료!"
-echo "  https://52surge.com"
+echo "  https://ourtle.com"
 echo "=============================="
 echo ""

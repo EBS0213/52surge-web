@@ -24,6 +24,7 @@ import type {
   WatchlistEntry,
   WatchlistStock,
   ChartCandle,
+  ArchivedEntry,
 } from '../../types/stock';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { join } from 'path';
@@ -35,7 +36,10 @@ const WATCHLIST_FILE = join(DATA_DIR, 'watchlist.json');
 interface PersistedState {
   settings: TurtleSettings;
   entries: WatchlistEntry[];
+  archive: ArchivedEntry[];
 }
+
+const ARCHIVE_RETENTION_DAYS = 21; // 3주 보관
 
 function loadState(): PersistedState {
   try {
@@ -45,26 +49,36 @@ function loadState(): PersistedState {
       return {
         settings: { ...DEFAULT_TURTLE_SETTINGS, ...parsed.settings },
         entries: parsed.entries || [],
+        archive: parsed.archive || [],
       };
     }
   } catch { /* 파일 손상 시 기본값 사용 */ }
-  return { settings: { ...DEFAULT_TURTLE_SETTINGS }, entries: [] };
+  return { settings: { ...DEFAULT_TURTLE_SETTINGS }, entries: [], archive: [] };
 }
 
-function saveState(settings: TurtleSettings, entries: WatchlistEntry[]) {
+function saveState(settings: TurtleSettings, entries: WatchlistEntry[], archive?: ArchivedEntry[]) {
   try {
     const { mkdirSync } = require('fs');
     if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true });
-    writeFileSync(WATCHLIST_FILE, JSON.stringify({ settings, entries }, null, 2), 'utf-8');
+    writeFileSync(WATCHLIST_FILE, JSON.stringify({ settings, entries, archive: archive ?? savedArchive }, null, 2), 'utf-8');
   } catch (err) {
     console.error('워치리스트 저장 실패:', err);
   }
+}
+
+/** 아카이브에서 3주 지난 항목 정리 */
+function cleanExpiredArchive(archive: ArchivedEntry[]): ArchivedEntry[] {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - ARCHIVE_RETENTION_DAYS);
+  const cutoffStr = cutoff.toISOString().slice(0, 10);
+  return archive.filter((a) => a.archivedAt >= cutoffStr);
 }
 
 // ── 상태 초기화 (파일에서 로드) ──
 const initialState = loadState();
 let savedSettings: TurtleSettings = initialState.settings;
 let savedEntries: WatchlistEntry[] = initialState.entries;
+let savedArchive: ArchivedEntry[] = initialState.archive;
 
 // 캐시: 차트 데이터 (종목코드 -> { candles, fetchedAt })
 const chartCache = new Map<string, { candles: ChartCandle[]; fetchedAt: number }>();
@@ -190,6 +204,10 @@ export async function GET() {
     const scanStocks = await getScanStocks();
     const existingCodes = new Set(savedEntries.map((e) => e.code));
 
+    // 아카이브에서 3주 지난 항목 정리
+    savedArchive = cleanExpiredArchive(savedArchive);
+    const archivedCodes = new Set(savedArchive.map((a) => a.code));
+
     // 스캔 종목 중 아직 편입되지 않은 종목에 대해 시그널 확인
     for (const stock of scanStocks) {
       if (existingCodes.has(stock.code)) continue;
@@ -208,6 +226,11 @@ export async function GET() {
             entryPrice: stock.close,
           });
           existingCodes.add(stock.code);
+          // 아카이브에 있었으면 제거 (재편입)
+          if (archivedCodes.has(stock.code)) {
+            savedArchive = savedArchive.filter((a) => a.code !== stock.code);
+            archivedCodes.delete(stock.code);
+          }
           continue;
         }
 
@@ -221,6 +244,10 @@ export async function GET() {
             entryPrice: stock.close,
           });
           existingCodes.add(stock.code);
+          if (archivedCodes.has(stock.code)) {
+            savedArchive = savedArchive.filter((a) => a.code !== stock.code);
+            archivedCodes.delete(stock.code);
+          }
         }
       } catch {
         // 개별 종목 실패 시 건너뜀
@@ -286,6 +313,65 @@ export async function POST(request: NextRequest) {
       savedSettings = { ...savedSettings, ...body.settings };
       saveState(savedSettings, savedEntries);
       return NextResponse.json({ success: true, settings: savedSettings });
+    }
+
+    // 편출 종목 정리 (auto_scheduler에서 장마감 후 호출)
+    // sellSignal=true인 종목을 아카이브로 이동
+    if (body.action === 'cleanupSellSignals') {
+      const enrichedStocks: WatchlistStock[] = [];
+      for (const entry of savedEntries) {
+        try {
+          const stock = await enrichEntry(entry, savedSettings);
+          enrichedStocks.push(stock);
+        } catch {
+          enrichedStocks.push({
+            code: entry.code, name: entry.name, system: entry.system,
+            entryDate: entry.entryDate, entryPrice: entry.entryPrice,
+            currentPrice: entry.entryPrice,
+            high20d: 0, low10d: 0, high55d: 0, low20d: 0,
+            nValue: 0, unitSize: 0, unitAmount: 0,
+            stopPrice: 0, riskPerShare: 0, positionPct: 0, rrr: 0,
+            pnlPct: 0, tradingDays: 0,
+            sellSignal: false, sellReason: undefined,
+          });
+        }
+        await new Promise((r) => setTimeout(r, 80));
+      }
+
+      const toArchive = enrichedStocks.filter((s) => s.sellSignal);
+      const toKeep = enrichedStocks.filter((s) => !s.sellSignal);
+
+      // 편출 종목을 아카이브로 이동
+      for (const stock of toArchive) {
+        // 이미 아카이브에 있으면 스킵
+        if (!savedArchive.some((a) => a.code === stock.code)) {
+          savedArchive.push({
+            code: stock.code,
+            name: stock.name,
+            system: stock.system,
+            entryDate: stock.entryDate,
+            entryPrice: stock.entryPrice,
+            archivedAt: today(),
+            sellReason: stock.sellReason || '편출',
+          });
+        }
+      }
+
+      // 활성 목록에서 편출 종목 제거
+      savedEntries = savedEntries.filter((e) =>
+        toKeep.some((k) => k.code === e.code)
+      );
+
+      // 3주 지난 아카이브 정리
+      savedArchive = cleanExpiredArchive(savedArchive);
+      saveState(savedSettings, savedEntries, savedArchive);
+
+      return NextResponse.json({
+        success: true,
+        archived: toArchive.map((s) => ({ code: s.code, name: s.name, reason: s.sellReason })),
+        remaining: savedEntries.length,
+        archiveTotal: savedArchive.length,
+      });
     }
 
     // 종목 수동 추가

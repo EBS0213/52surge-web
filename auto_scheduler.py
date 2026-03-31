@@ -130,6 +130,31 @@ def market_scan():
         traceback.print_exc()
 
 
+def cleanup_sell_signals():
+    """워치리스트에서 편출 종목을 아카이브로 이동 (장마감 후 실행)"""
+    kst_now = now_kst()
+    print(f"\n🧹 [편출 정리] {kst_now.strftime('%Y-%m-%d %H:%M:%S')} KST")
+
+    try:
+        url = "http://127.0.0.1:3000/api/watchlist"
+        payload = {"action": "cleanupSellSignals"}
+        response = requests.post(url, json=payload, timeout=120)
+
+        if response.status_code == 200:
+            data = response.json()
+            archived = data.get('archived', [])
+            if archived:
+                names = ', '.join(f"{a['name']}({a['reason']})" for a in archived)
+                print(f"  📦 아카이브 이동: {names}")
+                print(f"  📊 활성 {data.get('remaining', 0)}개 / 아카이브 {data.get('archiveTotal', 0)}개")
+            else:
+                print("  ✅ 편출 대상 없음")
+        else:
+            print(f"  ❌ 편출 정리 실패: {response.status_code} {response.text[:200]}")
+    except Exception as e:
+        print(f"  ❌ 편출 정리 오류: {e}")
+
+
 def daily_scan_and_notify():
     """장마감 스캔 + 텔레그램 발송 (16:00 KST)"""
     kst_now = now_kst()
@@ -182,6 +207,8 @@ def run_scheduler():
             schedule.every().day.at(time_str).do(market_scan)
     # UTC 07:00 = KST 16:00 (마지막 장중 스캔 + 텔레그램)
     schedule.every().day.at("07:00").do(daily_scan_and_notify)
+    # UTC 07:10 = KST 16:10 (편출 종목 아카이브 이동)
+    schedule.every().day.at("07:10").do(cleanup_sell_signals)
 
     kst_now = now_kst()
     print("="*60)
@@ -190,6 +217,7 @@ def run_scheduler():
     print(f"🕐 현재 시간: {kst_now.strftime('%Y-%m-%d %H:%M:%S')} KST")
     print("📅 장중 스캔: 09:00~16:00 KST, 10분 간격")
     print("📱 텔레그램: 16:00 KST 장마감 시 1회 발송")
+    print("🧹 편출 정리: 16:10 KST 워치리스트 편출→아카이브")
     print("📱 발송처: https://t.me/UlsanWhales")
     print("="*60)
 
