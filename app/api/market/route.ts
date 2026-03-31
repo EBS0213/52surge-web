@@ -15,14 +15,18 @@ const APP_SECRET = process.env.KIS_APP_SECRET || '';
 const cacheMap = new Map<string, { data: unknown; fetchedAt: number }>();
 const CACHE_TTL = 1 * 60 * 1000; // 1분
 
-// 기간 설정 (1d는 별도 10분봉 로직)
-type PeriodKey = '1d' | '1w' | '1m' | '3m' | '1y' | '3y';
+// 기간 설정
+// 캔들스틱(MA 시각화): daily(일봉), weekly(주봉), monthly(월봉)
+// 선형(MA 비표시): 1d(1일 10분봉), 3m, 1y, 3y, 5y
+type PeriodKey = 'daily' | 'weekly' | 'monthly' | '1d' | '3m' | '1y' | '3y' | '5y';
 const PERIOD_CONFIG: Record<string, { days: number; periodCode: string }> = {
-  '1w': { days: 10, periodCode: 'D' },    // 1주: 일봉 (최근 10일 → 약 7거래일)
-  '1m': { days: 40, periodCode: 'D' },    // 1개월: 일봉 (최근 40일 → 약 20거래일)
-  '3m': { days: 100, periodCode: 'W' },   // 3개월: 주봉 (약 13주)
-  '1y': { days: 380, periodCode: 'W' },   // 1년: 주봉 (약 52주)
-  '3y': { days: 1095, periodCode: 'M' },  // 3년: 월봉
+  'daily':   { days: 90, periodCode: 'D' },     // 일봉: 최근 90일
+  'weekly':  { days: 380, periodCode: 'W' },     // 주봉: 최근 약 52주
+  'monthly': { days: 1095, periodCode: 'M' },    // 월봉: 최근 약 3년
+  '3m':      { days: 100, periodCode: 'D' },     // 3개월: 일봉 선형
+  '1y':      { days: 380, periodCode: 'D' },     // 1년: 일봉 선형
+  '3y':      { days: 1095, periodCode: 'W' },    // 3년: 주봉 선형
+  '5y':      { days: 1825, periodCode: 'M' },    // 5년: 월봉 선형
 };
 
 interface CandleData {
@@ -313,8 +317,8 @@ async function refreshCache(periodKey: PeriodKey, cacheKey: string) {
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
-  const period = (searchParams.get('period') || '3m') as PeriodKey;
-  const validPeriod = PERIOD_CONFIG[period] ? period : '3m';
+  const period = (searchParams.get('period') || 'daily') as PeriodKey;
+  const validPeriod = (PERIOD_CONFIG[period] || period === '1d') ? period : 'daily';
   const cacheKey = `market_${validPeriod}`;
 
   // 캐시 확인: 유효 캐시가 있으면 바로 반환
