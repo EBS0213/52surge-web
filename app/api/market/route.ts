@@ -318,7 +318,7 @@ async function refreshCache(periodKey: PeriodKey, cacheKey: string) {
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
-  const period = (searchParams.get('period') || 'daily') as PeriodKey;
+  const period = (searchParams.get('period') || '1d') as PeriodKey;
   const validPeriod = (PERIOD_CONFIG[period] || period === '1d') ? period : 'daily';
   const cacheKey = `market_${validPeriod}`;
 

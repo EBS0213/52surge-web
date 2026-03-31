@@ -273,6 +273,26 @@ function CandleChart({ data, height }: { data: CandleData[]; height: number }) {
   );
 }
 
+/** 인트라데이 데이터인지 판별 (date가 HHMM 형식) */
+function isIntradayData(data: CandleData[]): boolean {
+  if (data.length === 0) return false;
+  return data[0].date.length <= 6 && /^\d{4,6}$/.test(data[0].date);
+}
+
+/** 인트라데이 X축: 정각(00분) 라벨만 표시, 해당 데이터 인덱스 반환 */
+function getIntradayHourIndices(data: CandleData[]): { idx: number; label: string }[] {
+  const result: { idx: number; label: string }[] = [];
+  for (let i = 0; i < data.length; i++) {
+    const d = data[i].date;
+    const mm = d.slice(2, 4);
+    if (mm === '00') {
+      const hh = d.slice(0, 2);
+      result.push({ idx: i, label: `${hh}:00` });
+    }
+  }
+  return result;
+}
+
 /** SVG 선형 차트 (MA 비표시) */
 function LineChart({ data, height }: { data: CandleData[]; height: number }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -331,11 +351,16 @@ function LineChart({ data, height }: { data: CandleData[]; height: number }) {
     yTickValues.push(allMin + (range * i) / (yTicks - 1));
   }
 
-  // X축 라벨
+  // X축 라벨: 인트라데이면 정각 시간만, 아니면 등간격
+  const intraday = isIntradayData(data);
+  const hourLabels = intraday ? getIntradayHourIndices(data) : [];
+
   const xLabelCount = Math.min(6, data.length);
   const xLabelIndices: number[] = [];
-  for (let i = 0; i < xLabelCount; i++) {
-    xLabelIndices.push(Math.round((i * (data.length - 1)) / (xLabelCount - 1)));
+  if (!intraday) {
+    for (let i = 0; i < xLabelCount; i++) {
+      xLabelIndices.push(Math.round((i * (data.length - 1)) / (xLabelCount - 1)));
+    }
   }
 
   return (
@@ -347,6 +372,16 @@ function LineChart({ data, height }: { data: CandleData[]; height: number }) {
           key={`yg-${i}`}
           x1={padding.left} y1={toY(v)}
           x2={padding.left + chartW} y2={toY(v)}
+          stroke="#f0f0f0" strokeWidth={0.8} strokeDasharray="3,3"
+        />
+      ))}
+
+      {/* 인트라데이: 정각 시간에 세로 가이드라인 */}
+      {intraday && hourLabels.map(({ idx }, i) => (
+        <line
+          key={`xg-${i}`}
+          x1={toX(idx)} y1={padding.top}
+          x2={toX(idx)} y2={padding.top + chartH}
           stroke="#f0f0f0" strokeWidth={0.8} strokeDasharray="3,3"
         />
       ))}
@@ -371,19 +406,33 @@ function LineChart({ data, height }: { data: CandleData[]; height: number }) {
         </text>
       ))}
 
-      {/* X축 날짜 */}
-      {xLabelIndices.map((idx) => (
-        <text
-          key={`xl-${idx}`}
-          x={toX(idx)}
-          y={height - 4}
-          fontSize={9}
-          fill="#a3a3a3"
-          textAnchor="middle"
-        >
-          {formatDateLabel(data[idx].date)}
-        </text>
-      ))}
+      {/* X축: 인트라데이 → 정각 시간 라벨, 기타 → 등간격 날짜 */}
+      {intraday
+        ? hourLabels.map(({ idx, label }, i) => (
+            <text
+              key={`xl-${i}`}
+              x={toX(idx)}
+              y={height - 4}
+              fontSize={9}
+              fill="#a3a3a3"
+              textAnchor="middle"
+            >
+              {label}
+            </text>
+          ))
+        : xLabelIndices.map((idx) => (
+            <text
+              key={`xl-${idx}`}
+              x={toX(idx)}
+              y={height - 4}
+              fontSize={9}
+              fill="#a3a3a3"
+              textAnchor="middle"
+            >
+              {formatDateLabel(data[idx].date)}
+            </text>
+          ))
+      }
     </svg>
     </div>
   );
@@ -396,7 +445,7 @@ function formatInvestor(v: number): string {
 }
 
 /** 단일 지수 카드 */
-const defaultPeriod: PeriodKey = 'daily';
+const defaultPeriod: PeriodKey = '1d';
 
 function IndexCard({ data, investor }: { data: IndexData; investor?: InvestorData | null }) {
   const [selectedPeriod, setSelectedPeriod] = useState<PeriodKey>(defaultPeriod);
@@ -561,7 +610,7 @@ export default function MarketIndex() {
 
   const fetchData = useCallback(async () => {
     try {
-      const res = await fetch('/api/market?period=daily');
+      const res = await fetch('/api/market?period=1d');
       if (!res.ok) {
         if (isMounted.current && !data) setError(true);
         return;
