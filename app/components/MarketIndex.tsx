@@ -17,6 +17,7 @@ interface IndexData {
   change: number;
   changeRate: number;
   chart: CandleData[];
+  investor?: InvestorData | null;
 }
 
 interface MarketData {
@@ -25,13 +26,20 @@ interface MarketData {
   period?: string;
 }
 
-type PeriodKey = '1w' | '3m' | '1y' | '3y';
+type PeriodKey = '1w' | '1m' | '3m' | '1y' | '3y';
 const PERIOD_LABELS: { key: PeriodKey; label: string }[] = [
   { key: '1w', label: '1주' },
+  { key: '1m', label: '1개월' },
   { key: '3m', label: '3개월' },
   { key: '1y', label: '1년' },
   { key: '3y', label: '3년' },
 ];
+
+interface InvestorData {
+  frgn: number;
+  inst: number;
+  prsn: number;
+}
 
 /** 이동평균 계산 */
 function calcMA(data: CandleData[], period: number): (number | null)[] {
@@ -245,9 +253,14 @@ function CandleChart({ data, height }: { data: CandleData[]; height: number }) {
   );
 }
 
-/** 단일 지수 카드 (독립적 상태 관리) */
-function IndexCard({ data }: { data: IndexData }) {
-  const [expanded, setExpanded] = useState(false);
+/** 수급 표시 포맷: 억원 */
+function formatInvestor(v: number): string {
+  const sign = v > 0 ? '+' : '';
+  return `${sign}${v.toLocaleString()}`;
+}
+
+/** 단일 지수 카드 (항상 확장, 독립적 상태 관리) */
+function IndexCard({ data, investor }: { data: IndexData; investor?: InvestorData | null }) {
   const [selectedPeriod, setSelectedPeriod] = useState<PeriodKey>('3m');
   const [periodChartData, setPeriodChartData] = useState<IndexData | null>(null);
   const [periodLoading, setPeriodLoading] = useState(false);
@@ -266,17 +279,8 @@ function IndexCard({ data }: { data: IndexData }) {
   const { state, ma5, ma10, ma20 } = getMarketState(data.chart);
   const sc = stateColor(state);
 
-  const displayChart = expanded && periodChartData ? periodChartData.chart : chartData;
-  const displayMA = expanded && periodChartData ? getMarketState(periodChartData.chart) : { ma5, ma10, ma20 };
-
-  const handleToggle = useCallback(() => {
-    setExpanded(prev => !prev);
-    if (expanded) {
-      // 접을 때 기간 리셋
-      setSelectedPeriod('3m');
-      setPeriodChartData(null);
-    }
-  }, [expanded]);
+  const displayChart = periodChartData ? periodChartData.chart : chartData;
+  const displayMA = periodChartData ? getMarketState(periodChartData.chart) : { ma5, ma10, ma20 };
 
   const handlePeriodChange = useCallback(async (period: PeriodKey) => {
     setSelectedPeriod(period);
@@ -290,7 +294,6 @@ function IndexCard({ data }: { data: IndexData }) {
       if (!res.ok) throw new Error('fetch failed');
       const result = await res.json();
       if (isMounted.current) {
-        // data.code로 해당 인덱스만 추출
         const target = data.code === '0001' ? result.kospi : result.kosdaq;
         setPeriodChartData(target);
       }
@@ -302,9 +305,9 @@ function IndexCard({ data }: { data: IndexData }) {
   }, [data.code]);
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 hover:shadow-md transition-shadow overflow-hidden">
+    <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
       {/* Header */}
-      <div className="p-5 pb-0 cursor-pointer" onClick={handleToggle}>
+      <div className="p-5 pb-0">
         <div className="flex items-center justify-between mb-1">
           <div className="flex items-center gap-3">
             <span className="text-base font-semibold text-gray-800">{data.name}</span>
@@ -313,17 +316,9 @@ function IndexCard({ data }: { data: IndexData }) {
               {state}
             </span>
           </div>
-          <div className="flex items-center gap-2">
-            <span className={`text-xs font-medium ${isUp ? 'text-red-500' : 'text-blue-500'}`}>
-              {arrow} {sign}{data.change.toFixed(2)} ({sign}{data.changeRate.toFixed(2)}%)
-            </span>
-            <svg
-              className={`w-4 h-4 text-gray-400 transition-transform ${expanded ? 'rotate-180' : ''}`}
-              fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-            </svg>
-          </div>
+          <span className={`text-xs font-medium ${isUp ? 'text-red-500' : 'text-blue-500'}`}>
+            {arrow} {sign}{data.change.toFixed(2)} ({sign}{data.changeRate.toFixed(2)}%)
+          </span>
         </div>
         <div className="text-3xl font-bold tracking-tight mb-2">
           {data.price.toLocaleString('ko-KR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -332,49 +327,67 @@ function IndexCard({ data }: { data: IndexData }) {
 
       {/* 차트 */}
       <div className="px-2">
-        <CandleChart data={displayChart} height={expanded ? 220 : 170} />
+        <CandleChart data={displayChart} height={220} />
       </div>
 
-      {/* 확장 영역 */}
-      {expanded && (
-        <div className="border-t border-gray-100">
-          {/* 기간 선택 탭 */}
-          <div className="px-5 py-3 flex items-center gap-2">
-            {PERIOD_LABELS.map(({ key, label }) => (
-              <button
-                key={key}
-                onClick={(e) => { e.stopPropagation(); handlePeriodChange(key); }}
-                className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${
-                  selectedPeriod === key
-                    ? 'bg-gray-900 text-white'
-                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-            {periodLoading && (
-              <span className="ml-2 text-xs text-gray-400 animate-pulse">불러오는 중...</span>
-            )}
-          </div>
+      {/* 기간 선택 + 수급 */}
+      <div className="border-t border-gray-100">
+        <div className="px-5 py-3 flex items-center gap-2">
+          {PERIOD_LABELS.map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => handlePeriodChange(key)}
+              className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${
+                selectedPeriod === key
+                  ? 'bg-gray-900 text-white'
+                  : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+          {periodLoading && (
+            <span className="ml-2 text-xs text-gray-400 animate-pulse">불러오는 중...</span>
+          )}
 
-          {/* MA 정보 */}
-          <div className="px-5 py-3 border-t border-gray-50 flex items-center gap-4 text-xs text-gray-500">
-            <span className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />
-              MA5: {displayMA.ma5.toFixed(1)}
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-violet-500 inline-block" />
-              MA10: {displayMA.ma10.toFixed(1)}
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-cyan-500 inline-block" />
-              MA20: {displayMA.ma20.toFixed(1)}
-            </span>
-          </div>
+          {/* 수급 데이터 (오른쪽 여백 활용) */}
+          {investor && (
+            <div className="ml-auto flex items-center gap-3 text-[10px]">
+              <span className="text-gray-400">
+                기관 <span className={`font-semibold ${investor.inst > 0 ? 'text-red-500' : investor.inst < 0 ? 'text-blue-500' : 'text-gray-400'}`}>
+                  {formatInvestor(investor.inst)}
+                </span>
+              </span>
+              <span className="text-gray-400">
+                외국인 <span className={`font-semibold ${investor.frgn > 0 ? 'text-red-500' : investor.frgn < 0 ? 'text-blue-500' : 'text-gray-400'}`}>
+                  {formatInvestor(investor.frgn)}
+                </span>
+              </span>
+              <span className="text-gray-400">
+                개인 <span className={`font-semibold ${investor.prsn > 0 ? 'text-red-500' : investor.prsn < 0 ? 'text-blue-500' : 'text-gray-400'}`}>
+                  {formatInvestor(investor.prsn)}
+                </span>
+              </span>
+            </div>
+          )}
         </div>
-      )}
+
+        {/* MA 정보 */}
+        <div className="px-5 py-3 border-t border-gray-50 flex items-center gap-4 text-xs text-gray-500">
+          <span className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />
+            MA5: {displayMA.ma5.toFixed(1)}
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-full bg-violet-500 inline-block" />
+            MA10: {displayMA.ma10.toFixed(1)}
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-full bg-cyan-500 inline-block" />
+            MA20: {displayMA.ma20.toFixed(1)}
+          </span>
+        </div>
+      </div>
     </div>
   );
 }
@@ -441,8 +454,8 @@ export default function MarketIndex() {
   return (
     <section className="pt-4 pb-2 px-6">
       <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-4">
-        <IndexCard data={data.kospi} />
-        <IndexCard data={data.kosdaq} />
+        <IndexCard data={data.kospi} investor={data.kospi.investor} />
+        <IndexCard data={data.kosdaq} investor={data.kosdaq.investor} />
       </div>
     </section>
   );

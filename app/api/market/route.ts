@@ -15,9 +15,10 @@ const cacheMap = new Map<string, { data: unknown; fetchedAt: number }>();
 const CACHE_TTL = 5 * 60 * 1000;
 
 // 기간 설정
-type PeriodKey = '1w' | '3m' | '1y' | '3y';
+type PeriodKey = '1w' | '1m' | '3m' | '1y' | '3y';
 const PERIOD_CONFIG: Record<PeriodKey, { days: number; periodCode: string }> = {
   '1w': { days: 14, periodCode: 'D' },    // 1주 (여유있게 14일 일봉)
+  '1m': { days: 35, periodCode: 'D' },    // 1개월 일봉
   '3m': { days: 90, periodCode: 'D' },    // 3개월 일봉
   '1y': { days: 365, periodCode: 'W' },   // 1년 주봉
   '3y': { days: 1095, periodCode: 'M' },  // 3년 월봉
@@ -101,6 +102,69 @@ async function fetchIndex(code: string, name: string, periodKey: PeriodKey = '3m
   };
 }
 
+/** 투자자별 매매동향 (수급) 조회 — 실패 시 null 반환 */
+interface InvestorData {
+  frgn: number;   // 외국인 순매수 금액 (억원)
+  inst: number;   // 기관 순매수 금액 (억원)
+  prsn: number;   // 개인 순매수 금액 (억원)
+}
+
+async function fetchInvestor(code: string): Promise<InvestorData | null> {
+  try {
+    const token = await getAccessToken();
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json; charset=utf-8',
+      authorization: `Bearer ${token}`,
+      appkey: APP_KEY,
+      appsecret: APP_SECRET,
+      tr_id: 'FHPTJ04400000',
+      custtype: 'P',
+    };
+
+    const today = new Date();
+    const fmt = (d: Date) =>
+      `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+
+    const params = new URLSearchParams({
+      FID_COND_MRKT_DIV_CODE: 'U',
+      FID_INPUT_ISCD: code,
+      FID_INPUT_DATE_1: fmt(today),
+      FID_INPUT_DATE_2: fmt(today),
+      FID_PERIOD_DIV_CODE: 'D',
+    });
+
+    const res = await fetch(
+      `${BASE_URL}/uapi/domestic-stock/v1/quotations/foreign-institution-total?${params}`,
+      { headers, cache: 'no-store' }
+    );
+
+    if (!res.ok) return null;
+    const data = await res.json();
+    const items = data.output || data.output2 || data.output1;
+    if (!items || (Array.isArray(items) && items.length === 0)) return null;
+
+    // 첫 번째 항목에서 수급 데이터 추출 시도
+    const item = Array.isArray(items) ? items[0] : items;
+
+    // KIS API 필드명 후보들 시도
+    const frgn = Number(item.frgn_ntby_tr_pbmn || item.frgn_pure_buy_tr_pbmn || item.frgn_ntby_qty || 0);
+    const inst = Number(item.orgn_ntby_tr_pbmn || item.orgn_pure_buy_tr_pbmn || item.orgn_ntby_qty || 0);
+    const prsn = Number(item.prsn_ntby_tr_pbmn || item.prsn_pure_buy_tr_pbmn || item.prsn_ntby_qty || 0);
+
+    // 모두 0이면 데이터 없음
+    if (frgn === 0 && inst === 0 && prsn === 0) return null;
+
+    // 억 단위 변환 (원→억)
+    return {
+      frgn: Math.round(frgn / 100_000_000),
+      inst: Math.round(inst / 100_000_000),
+      prsn: Math.round(prsn / 100_000_000),
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const period = (searchParams.get('period') || '3m') as PeriodKey;
@@ -121,12 +185,18 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const [kospi, kosdaq] = await Promise.all([
+    const [kospi, kosdaq, kospiInv, kosdaqInv] = await Promise.all([
       fetchIndex('0001', 'KOSPI', validPeriod),
       fetchIndex('1001', 'KOSDAQ', validPeriod),
+      fetchInvestor('0001'),
+      fetchInvestor('1001'),
     ]);
 
-    const result = { kospi, kosdaq, period: validPeriod };
+    const result = {
+      kospi: { ...kospi, investor: kospiInv },
+      kosdaq: { ...kosdaq, investor: kosdaqInv },
+      period: validPeriod,
+    };
     cacheMap.set(cacheKey, { data: result, fetchedAt: Date.now() });
     return NextResponse.json(result);
   } catch (error) {
