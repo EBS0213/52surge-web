@@ -41,23 +41,11 @@ function SettingsPanel({
       <button
         onClick={() => { setForm(settings); setOpen(true); }}
         className="group text-gray-400 hover:text-black transition-colors"
-        title="계산기"
+        title="설정"
       >
-        <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <rect x="1" y="1" width="26" height="26" rx="4" stroke="currentColor" strokeWidth="2"/>
-          <line x1="14" y1="1" x2="14" y2="27" stroke="currentColor" strokeWidth="1.5"/>
-          <line x1="1" y1="14" x2="27" y2="14" stroke="currentColor" strokeWidth="1.5"/>
-          {/* + */}
-          <line x1="7.5" y1="5" x2="7.5" y2="9" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-          <line x1="5.5" y1="7" x2="9.5" y2="7" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-          {/* − */}
-          <line x1="19" y1="7" x2="23" y2="7" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-          {/* × */}
-          <line x1="5.5" y1="19" x2="9.5" y2="23" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-          <line x1="9.5" y1="19" x2="5.5" y2="23" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-          {/* = */}
-          <line x1="19" y1="19.5" x2="23" y2="19.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-          <line x1="19" y1="22.5" x2="23" y2="22.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
         </svg>
       </button>
     );
@@ -522,13 +510,9 @@ export default function WatchlistPage() {
       <section className="pt-24 pb-6 px-6">
         <div className="max-w-7xl mx-auto">
           <div>
-            <h1 className="text-3xl md:text-4xl font-bold tracking-tight mb-2 bg-gradient-to-br from-gray-900 to-gray-600 bg-clip-text text-transparent">
+            <h1 className="text-3xl md:text-4xl font-bold tracking-tight bg-gradient-to-br from-gray-900 to-gray-600 bg-clip-text text-transparent">
               Dennis
             </h1>
-            <p className="text-xs text-gray-400 mb-1">터틀 트레이딩 워치리스트</p>
-            <p className="text-gray-500">
-              시스템 1·2 기준 자동 편입 — N값·유닛·손절가 실시간 계산
-            </p>
           </div>
 
           {error && (
@@ -564,7 +548,7 @@ export default function WatchlistPage() {
             <SystemInfo />
 
             {/* Settings */}
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2 mb-4">
               <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-widest">Settings</h2>
               <SettingsPanel settings={data.settings} onUpdate={updateSettings} />
             </div>
