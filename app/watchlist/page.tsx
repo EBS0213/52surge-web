@@ -86,7 +86,7 @@ function SettingsPanel({
     { key: 'winRate', label: '승률', step: '5', suffix: '%' },
     { key: 'marketCondition', label: '시장장세', step: '1', fixed: true },
     { key: 'currentMarket', label: '현재시장', step: '1' },
-    { key: 'maxUnits', label: 'UNIT', step: '1', fixed: true },
+    { key: 'maxUnits', label: 'UNIT', step: '1', suffix: '등분' },
     { key: 'deployedUnits', label: '투입유닛', step: '1' },
   ];
 
