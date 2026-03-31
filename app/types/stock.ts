@@ -107,3 +107,66 @@ export interface WatchlistEntry {
   entryDate: string;
   entryPrice: number;
 }
+
+// ── 트레이드 기록 (매매일지) ──
+
+/** 매도 유형 */
+export type SellType =
+  | '전량매도'
+  | '스탑로스'
+  | '손절'
+  | '트레일링스탑'
+  | '부분매도'
+  | '시스템청산'
+  | '기타';
+
+/** 트레이드 기록 */
+export interface TradeRecord {
+  id: string;                 // 고유 ID
+  stockName: string;          // 종목명
+  stockCode: string;          // 종목코드
+  source: string;             // 출처 워치리스트 (Dennis, 등)
+  entryDate: string;          // 진입일 (YYYY-MM-DD)
+  exitDate: string;           // 청산일 (YYYY-MM-DD)
+  entryPrice: number;         // 진입가
+  exitPrice: number;          // 청산가
+  quantity: number;           // 수량
+  investAmount: number;       // 투자금
+  pnlAmount: number;          // 손익금액
+  pnlPct: number;             // 수익률 (%)
+  sellType: SellType;         // 매도유형
+  sellReason?: string;        // 매도사유 (상세)
+  units: number;              // 유닛수
+  currentSeed: number;        // 현재시드
+  memo?: string;              // 메모
+  createdAt: string;          // 기록일시
+}
+
+/** 벤치마크 설정 */
+export interface BenchmarkConfig {
+  indexName: string;           // 벤치마크 지수명 (코스닥 등)
+  startDate: string;          // 시작일
+  endDate: string;            // 종료일
+  initialSeed: number;        // 최초시드
+}
+
+/** 트레이드 기록 API 응답 */
+export interface TradesResult {
+  trades: TradeRecord[];
+  benchmark: BenchmarkConfig;
+  summary: TradeSummary;
+}
+
+/** 트레이드 요약 통계 */
+export interface TradeSummary {
+  totalTrades: number;        // 총 거래수
+  winCount: number;           // 승 횟수
+  loseCount: number;          // 패 횟수
+  winRate: number;            // 실제 승률 (%)
+  totalPnl: number;           // 총 실현수익
+  totalPnlPct: number;        // 총 수익률 (%)
+  currentSeed: number;        // 현재시드
+  avgPnlPct: number;          // 평균 수익률 (%)
+  maxWinPct: number;          // 최대 수익률 (%)
+  maxLossPct: number;         // 최대 손실률 (%)
+}

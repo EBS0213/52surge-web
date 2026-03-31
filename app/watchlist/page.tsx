@@ -500,6 +500,7 @@ export default function WatchlistPage() {
           <div className="flex items-center gap-7 ml-8">
             <Link href="/" className="text-xs tracking-wide text-white/70 hover:text-white transition-colors">Home</Link>
             <span className="text-xs tracking-wide text-white font-medium">Dennis</span>
+            <Link href="/trades" className="text-xs tracking-wide text-white/70 hover:text-white transition-colors">Trade Log</Link>
           </div>
           <div className="flex items-center gap-4 ml-auto">
             {data?.lastUpdated && (
