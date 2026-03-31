@@ -15,8 +15,9 @@ const cacheMap = new Map<string, { data: unknown; fetchedAt: number }>();
 const CACHE_TTL = 1 * 60 * 1000; // 1분
 
 // 기간 설정
-type PeriodKey = '1w' | '1m' | '3m' | '1y' | '3y';
+type PeriodKey = '1d' | '1w' | '1m' | '3m' | '1y' | '3y';
 const PERIOD_CONFIG: Record<PeriodKey, { days: number; periodCode: string }> = {
+  '1d': { days: 5, periodCode: 'D' },     // 1일 (최근 5거래일 일봉)
   '1w': { days: 14, periodCode: 'D' },    // 1주 (여유있게 14일 일봉)
   '1m': { days: 35, periodCode: 'D' },    // 1개월 일봉
   '3m': { days: 90, periodCode: 'D' },    // 3개월 일봉

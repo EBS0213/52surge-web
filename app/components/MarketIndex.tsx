@@ -26,8 +26,9 @@ interface MarketData {
   period?: string;
 }
 
-type PeriodKey = '1w' | '1m' | '3m' | '1y' | '3y';
+type PeriodKey = '1d' | '1w' | '1m' | '3m' | '1y' | '3y';
 const PERIOD_LABELS: { key: PeriodKey; label: string }[] = [
+  { key: '1d', label: '1일' },
   { key: '1w', label: '1주' },
   { key: '1m', label: '1개월' },
   { key: '3m', label: '3개월' },
@@ -260,8 +261,10 @@ function formatInvestor(v: number): string {
 }
 
 /** 단일 지수 카드 (항상 확장, 독립적 상태 관리) */
+const defaultPeriod: PeriodKey = '3m';
+
 function IndexCard({ data, investor }: { data: IndexData; investor?: InvestorData | null }) {
-  const [selectedPeriod, setSelectedPeriod] = useState<PeriodKey>('3m');
+  const [selectedPeriod, setSelectedPeriod] = useState<PeriodKey>(defaultPeriod);
   const [periodChartData, setPeriodChartData] = useState<IndexData | null>(null);
   const [periodLoading, setPeriodLoading] = useState(false);
   const isMounted = useRef(true);
@@ -284,7 +287,7 @@ function IndexCard({ data, investor }: { data: IndexData; investor?: InvestorDat
 
   const handlePeriodChange = useCallback(async (period: PeriodKey) => {
     setSelectedPeriod(period);
-    if (period === '3m') {
+    if (period === defaultPeriod) {
       setPeriodChartData(null);
       return;
     }
@@ -401,15 +404,22 @@ export default function MarketIndex() {
     try {
       const res = await fetch('/api/market');
       if (!res.ok) {
-        setError(true);
+        if (isMounted.current && !data) setError(true);
         return;
       }
       const result = await res.json();
-      if (isMounted.current) setData(result);
+      if (result.error) {
+        if (isMounted.current && !data) setError(true);
+        return;
+      }
+      if (isMounted.current) {
+        setData(result);
+        setError(false); // 성공 시 에러 상태 해제
+      }
     } catch {
-      if (isMounted.current) setError(true);
+      if (isMounted.current && !data) setError(true);
     }
-  }, []);
+  }, [data]);
 
   useEffect(() => {
     isMounted.current = true;
