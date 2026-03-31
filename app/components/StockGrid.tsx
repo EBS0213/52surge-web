@@ -161,13 +161,17 @@ export default function StockGrid({
     return () => window.removeEventListener('resize', updateCardsPerPage);
   }, []);
 
-  // 필터 적용
+  // 필터 적용 (기본값일 때는 필터 안 함, undefined/null 안전 처리)
   const stocks = useMemo(() => {
     return data.stocks.filter((s) => {
-      if (s.rsi < filters.rsiMin) return false;
-      if (s.rsi > filters.rsiMax) return false;
-      if (s.volume_change_pct < filters.volumeChangeMin) return false;
-      if (s.trading_value / 100_000_000 < filters.tradingValueMin) return false;
+      const rsi = s.rsi ?? 0;
+      const volChange = s.volume_change_pct ?? 0;
+      const tradingVal = (s.trading_value ?? 0) / 100_000_000;
+
+      if (filters.rsiMin > 0 && rsi < filters.rsiMin) return false;
+      if (filters.rsiMax < 100 && rsi > filters.rsiMax) return false;
+      if (filters.volumeChangeMin > 0 && volChange < filters.volumeChangeMin) return false;
+      if (filters.tradingValueMin > 0 && tradingVal < filters.tradingValueMin) return false;
       return true;
     });
   }, [data.stocks, filters]);
