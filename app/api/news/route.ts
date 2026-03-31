@@ -91,6 +91,11 @@ const RSS_FEEDS = [
   { url: 'https://www.yna.co.kr/RSS/economy.xml', source: '연합뉴스' },
   { url: 'https://www.korea.kr/rss/policy.xml', source: '정책브리핑' },
   { url: 'https://www.korea.kr/rss/pressrelease.xml', source: '정책브리핑' },
+  { url: 'https://news.einfomax.co.kr/rss/clickTop.xml', source: '연합인포맥스' },
+  { url: 'https://news.einfomax.co.kr/rss/S1N2.xml', source: '연합인포맥스' },
+  { url: 'https://news.einfomax.co.kr/rss/S1N7.xml', source: '연합인포맥스' },
+  { url: 'https://news.einfomax.co.kr/rss/S1N16.xml', source: '연합인포맥스' },
+  { url: 'https://news.einfomax.co.kr/rss/S1N23.xml', source: '연합인포맥스' },
 ];
 
 function extractTag(xml: string, tag: string): string {

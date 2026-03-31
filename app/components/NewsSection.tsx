@@ -21,6 +21,7 @@ const SOURCE_FILTERS: { key: string; label: string; match: (s: string) => boolea
   { key: 'yonhap', label: '연합', match: (s) => s.includes('연합뉴스') },
   { key: 'policy', label: '정책브리핑', match: (s) => s.includes('정책브리핑') },
   { key: 'naver', label: '네이버', match: (s) => s.includes('네이버') || s.includes('Naver') },
+  { key: 'einfomax', label: '인포맥스', match: (s) => s.includes('인포맥스') },
   { key: 'kcif', label: 'KCIF', match: (s) => s.includes('KCIF') || s.includes('국제금융') },
 ];
 
@@ -45,13 +46,8 @@ function sourceBadge(source: string) {
   if (source.includes('연합뉴스')) return 'bg-green-50 text-green-600';
   if (source.includes('네이버') || source.includes('Naver')) return 'bg-emerald-50 text-emerald-600';
   if (source.includes('정책브리핑')) return 'bg-sky-50 text-sky-600';
+  if (source.includes('인포맥스')) return 'bg-amber-50 text-amber-600';
   if (source.includes('KCIF') || source.includes('국제금융')) return 'bg-indigo-50 text-indigo-600';
-  if (source.includes('Google') || source.includes('Reuters') || source.includes('Bloomberg') || source.includes('Yahoo'))
-    return 'bg-orange-50 text-orange-600';
-  if (source.includes('WSJ') || source.includes('CNBC') || source.includes('CNN'))
-    return 'bg-orange-50 text-orange-600';
-  if (source.includes('바이두') || source.includes('新') || source.includes('中'))
-    return 'bg-red-50 text-red-600';
   return 'bg-gray-50 text-gray-600';
 }
 
