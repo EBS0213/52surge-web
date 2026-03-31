@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import type { Stock, ScanResult } from '../types/stock';
 import StockCard from './StockCard';
 
@@ -21,6 +21,113 @@ interface StockGridProps {
   onStockClick?: (stock: Stock) => void;
 }
 
+/** 필터 설정 */
+interface FilterState {
+  rsiMin: number;
+  rsiMax: number;
+  volumeChangeMin: number;  // 거래량 변화율 최소 (%)
+  tradingValueMin: number;  // 거래대금 최소 (억)
+}
+
+const DEFAULT_FILTERS: FilterState = {
+  rsiMin: 0,
+  rsiMax: 100,
+  volumeChangeMin: 0,
+  tradingValueMin: 0,
+};
+
+/** 필터 패널 */
+function FilterPanel({
+  filters,
+  onChange,
+  onReset,
+  matchCount,
+  totalCount,
+}: {
+  filters: FilterState;
+  onChange: (f: FilterState) => void;
+  onReset: () => void;
+  matchCount: number;
+  totalCount: number;
+}) {
+  const inputClass =
+    'w-full px-2 py-1.5 bg-white border border-gray-200 rounded-lg text-sm text-center focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent';
+
+  const isDefault =
+    filters.rsiMin === 0 &&
+    filters.rsiMax === 100 &&
+    filters.volumeChangeMin === 0 &&
+    filters.tradingValueMin === 0;
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-200 p-4 mb-4">
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-sm font-medium text-gray-700">
+          필터 적용 중: <span className="font-semibold text-gray-900">{matchCount}</span>
+          <span className="text-gray-400">/{totalCount}</span>
+        </span>
+        {!isDefault && (
+          <button onClick={onReset} className="text-xs text-gray-400 hover:text-gray-600 transition-colors">
+            초기화
+          </button>
+        )}
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {/* RSI 범위 */}
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">RSI 최소</label>
+          <input
+            className={inputClass}
+            type="text"
+            inputMode="numeric"
+            value={filters.rsiMin || ''}
+            onChange={(e) => onChange({ ...filters, rsiMin: Number(e.target.value) || 0 })}
+            placeholder="0"
+          />
+        </div>
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">RSI 최대</label>
+          <input
+            className={inputClass}
+            type="text"
+            inputMode="numeric"
+            value={filters.rsiMax === 100 ? '' : filters.rsiMax}
+            onChange={(e) => onChange({ ...filters, rsiMax: Number(e.target.value) || 100 })}
+            placeholder="100"
+          />
+        </div>
+
+        {/* 거래량 변화율 */}
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">거래량 변화율 (% 이상)</label>
+          <input
+            className={inputClass}
+            type="text"
+            inputMode="decimal"
+            value={filters.volumeChangeMin || ''}
+            onChange={(e) => onChange({ ...filters, volumeChangeMin: Number(e.target.value) || 0 })}
+            placeholder="0"
+          />
+        </div>
+
+        {/* 거래대금 */}
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">거래대금 (억 이상)</label>
+          <input
+            className={inputClass}
+            type="text"
+            inputMode="numeric"
+            value={filters.tradingValueMin || ''}
+            onChange={(e) => onChange({ ...filters, tradingValueMin: Number(e.target.value) || 0 })}
+            placeholder="0"
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function StockGrid({
   data,
   realtimePrices = {},
@@ -28,6 +135,8 @@ export default function StockGrid({
   onStockClick,
 }: StockGridProps) {
   const [currentPage, setCurrentPage] = useState(0);
+  const [showFilter, setShowFilter] = useState(false);
+  const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS);
   const [isAnimating, setIsAnimating] = useState(false);
   const [slideDirection, setSlideDirection] = useState<'left' | 'right' | null>(null);
   const trackRef = useRef<HTMLDivElement>(null);
@@ -52,13 +161,35 @@ export default function StockGrid({
     return () => window.removeEventListener('resize', updateCardsPerPage);
   }, []);
 
-  const stocks = data.stocks;
+  // 필터 적용
+  const stocks = useMemo(() => {
+    return data.stocks.filter((s) => {
+      if (s.rsi < filters.rsiMin) return false;
+      if (s.rsi > filters.rsiMax) return false;
+      if (s.volume_change_pct < filters.volumeChangeMin) return false;
+      if (s.trading_value / 100_000_000 < filters.tradingValueMin) return false;
+      return true;
+    });
+  }, [data.stocks, filters]);
+
+  const isFiltered =
+    filters.rsiMin !== 0 ||
+    filters.rsiMax !== 100 ||
+    filters.volumeChangeMin !== 0 ||
+    filters.tradingValueMin !== 0;
+
   const totalPages = Math.max(1, Math.ceil(stocks.length / cardsPerPage));
 
-  // Clamp page if data changes
+  // Clamp page if data/filter changes
   useEffect(() => {
     if (currentPage >= totalPages) setCurrentPage(Math.max(0, totalPages - 1));
   }, [totalPages, currentPage]);
+
+  // 필터 변경 시 첫 페이지로
+  const handleFilterChange = useCallback((newFilters: FilterState) => {
+    setFilters(newFilters);
+    setCurrentPage(0);
+  }, []);
 
   const goToPage = useCallback(
     (page: number) => {
@@ -128,21 +259,42 @@ export default function StockGrid({
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="flex items-baseline justify-between mb-4">
-          <div>
-            <h2 className="text-2xl font-bold">워치리스트</h2>
-            <p className="text-gray-500 mt-1">
-              총 {data.total_found}개
-              {totalPages > 1 && (
-                <span className="ml-2 text-gray-400">
-                  ({currentPage + 1} / {totalPages} 페이지)
-                </span>
-              )}
-              {isRealtimeAvailable && (
-                <span className="ml-2 text-green-500 text-xs">
-                  실시간 시세 연동 중
-                </span>
-              )}
-            </p>
+          <div className="flex items-center gap-3">
+            <div>
+              <h2 className="text-2xl font-bold">워치리스트</h2>
+              <p className="text-gray-500 mt-1">
+                {isFiltered ? (
+                  <span>{stocks.length}개 <span className="text-gray-400">/ {data.total_found}개</span></span>
+                ) : (
+                  <span>총 {data.total_found}개</span>
+                )}
+                {totalPages > 1 && (
+                  <span className="ml-2 text-gray-400">
+                    ({currentPage + 1} / {totalPages} 페이지)
+                  </span>
+                )}
+                {isRealtimeAvailable && (
+                  <span className="ml-2 text-green-500 text-xs">
+                    실시간 시세 연동 중
+                  </span>
+                )}
+              </p>
+            </div>
+
+            {/* 필터 토글 */}
+            <button
+              onClick={() => setShowFilter(!showFilter)}
+              className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${
+                showFilter || isFiltered
+                  ? 'bg-gray-900 text-white'
+                  : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+              }`}
+            >
+              <svg className="w-3.5 h-3.5 inline-block mr-1 -mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+              </svg>
+              필터{isFiltered ? ' ON' : ''}
+            </button>
           </div>
 
           {/* Navigation arrows */}
@@ -171,6 +323,17 @@ export default function StockGrid({
             </div>
           )}
         </div>
+
+        {/* 필터 패널 */}
+        {showFilter && (
+          <FilterPanel
+            filters={filters}
+            onChange={handleFilterChange}
+            onReset={() => handleFilterChange(DEFAULT_FILTERS)}
+            matchCount={stocks.length}
+            totalCount={data.total_found}
+          />
+        )}
 
         {/* Slide container */}
         <div
