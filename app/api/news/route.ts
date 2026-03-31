@@ -84,11 +84,13 @@ async function translateIfNeeded(items: NewsItem[]): Promise<NewsItem[]> {
 // RSS 피드 (국내 경제 뉴스) — 무료
 // ────────────────────────────────────────
 const RSS_FEEDS = [
-  { url: 'https://www.hankyung.com/feed/stock', source: '한국경제' },
+  { url: 'https://www.hankyung.com/feed/finance', source: '한국경제' },
   { url: 'https://www.hankyung.com/feed/economy', source: '한국경제' },
+  { url: 'https://www.hankyung.com/feed/all-news', source: '한국경제' },
   { url: 'https://www.mk.co.kr/rss/30100041/', source: '매일경제' },
   { url: 'https://www.mk.co.kr/rss/30000001/', source: '매일경제' },
-  { url: 'https://www.yna.co.kr/RSS/economy.xml', source: '연합뉴스' },
+  { url: 'https://www.yna.co.kr/rss/economy.xml', source: '연합뉴스' },
+  { url: 'https://www.yna.co.kr/rss/news.xml', source: '연합뉴스' },
   { url: 'https://www.korea.kr/rss/policy.xml', source: '정책브리핑' },
   { url: 'https://www.korea.kr/rss/pressrelease.xml', source: '정책브리핑' },
   { url: 'https://news.einfomax.co.kr/rss/clickTop.xml', source: '연합인포맥스' },
@@ -137,7 +139,17 @@ async function fetchRssFeed(url: string, source: string): Promise<NewsItem[]> {
 async function fetchRssNews(): Promise<NewsItem[]> {
   if (isFresh(rssCache, RSS_CACHE_TTL)) return rssCache.data;
   const results = await Promise.all(RSS_FEEDS.map((f) => fetchRssFeed(f.url, f.source)));
-  const items = dedup(sortByDate(results.flat())).slice(0, 15);
+  const all = dedup(sortByDate(results.flat()));
+
+  // 매체별 최대 5개씩 균등 배분 후 최신순 정렬
+  const bySource = new Map<string, NewsItem[]>();
+  for (const item of all) {
+    const arr = bySource.get(item.source) || [];
+    if (arr.length < 5) arr.push(item);
+    bySource.set(item.source, arr);
+  }
+  const items = sortByDate(Array.from(bySource.values()).flat());
+
   rssCache = { data: items, fetchedAt: Date.now() };
   return items;
 }
