@@ -63,7 +63,15 @@ function NewsCard({ item, index }: { item: NewsItem; index: number }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
 
+  // KCIF는 개별 기사 링크가 없으므로 새 탭으로 원문 페이지 열기
+  const isKcif = item.source === 'KCIF';
+
   const handleClick = async () => {
+    if (isKcif) {
+      window.open(item.link, '_blank', 'noopener,noreferrer');
+      return;
+    }
+
     if (expanded) {
       setExpanded(false);
       return;
@@ -115,8 +123,8 @@ function NewsCard({ item, index }: { item: NewsItem; index: number }) {
             <span className="text-[11px] text-[#86868b]">{timeAgo(item.pubDate)}</span>
           )}
           <div className="flex-1" />
-          <span className={`text-[11px] text-[#86868b] transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}>
-            ▼
+          <span className={`text-[11px] text-[#86868b] transition-transform duration-200 ${!isKcif && expanded ? 'rotate-180' : ''}`}>
+            {isKcif ? '↗' : '▼'}
           </span>
         </div>
 

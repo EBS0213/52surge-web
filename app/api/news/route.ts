@@ -233,12 +233,16 @@ async function fetchBaiduNews(): Promise<NewsItem[]> {
 
 // ────────────────────────────────────────
 // KCIF 국제금융센터 — 국제금융속보 직접 스크래핑
+// 페이지 형식: "[3.31] 미국 트럼프, 합의 실패하면..." (날짜별 한 줄 요약, 개별 링크 없음)
 // ────────────────────────────────────────
 async function fetchKcifReports(): Promise<NewsItem[]> {
   if (isFresh(kcifCache, RSS_CACHE_TTL)) return kcifCache.data;
 
+  const KCIF_URL = 'https://www.kcif.or.kr/annual/newsflashList';
+  const currentYear = new Date().getFullYear();
+
   try {
-    const res = await fetch('https://www.kcif.or.kr/annual/newsflashList', {
+    const res = await fetch(KCIF_URL, {
       signal: AbortSignal.timeout(10000),
       headers: {
         'User-Agent': 'Mozilla/5.0 (compatible; OURTLE/1.0)',
@@ -248,82 +252,36 @@ async function fetchKcifReports(): Promise<NewsItem[]> {
     if (!res.ok) return (kcifCache as Cache<NewsItem[]> | null)?.data || [];
     const html = await res.text();
 
+    // HTML 태그 제거 후 텍스트에서 [M.DD] 패턴 추출
+    const text = html.replace(/<[^>]*>/g, '\n').replace(/&nbsp;/g, ' ');
     const items: NewsItem[] = [];
 
-    // 게시판 테이블에서 행 추출 시도 (여러 패턴)
-    // 패턴 1: <a href="...newsflashView?articleNo=123...">제목</a> + 날짜
-    const linkRegex = /<a[^>]*href=["']([^"']*newsflash[^"']*)["'][^>]*>([\s\S]*?)<\/a>/gi;
+    // "[3.31] 제목 텍스트" 패턴 매칭
+    const lineRegex = /\[(\d{1,2})\.(\d{1,2})\]\s*(.+)/g;
     let match;
-    while ((match = linkRegex.exec(html)) !== null && items.length < 10) {
-      const href = match[1].trim();
-      const title = stripHtml(match[2]).trim();
+    while ((match = lineRegex.exec(text)) !== null && items.length < 15) {
+      const month = match[1].padStart(2, '0');
+      const day = match[2].padStart(2, '0');
+      const title = match[3].trim().replace(/\s+/g, ' ');
       if (!title || title.length < 5) continue;
 
-      // 절대 URL 처리
-      const link = href.startsWith('http') ? href : `https://www.kcif.or.kr${href.startsWith('/') ? '' : '/'}${href}`;
+      // 날짜 생성 (올해 기준)
+      const dateStr = `${currentYear}-${month}-${day}T09:00:00+09:00`;
 
       items.push({
-        title,
-        link,
+        title: `[${match[1]}.${match[2]}] ${title}`,
+        link: KCIF_URL,
         source: 'KCIF',
-        pubDate: '',
+        pubDate: dateStr,
         description: '국제금융속보',
       });
-    }
-
-    // 패턴 1로 못 찾으면 패턴 2: 일반적 게시판 링크
-    if (items.length === 0) {
-      const trRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
-      let trMatch;
-      while ((trMatch = trRegex.exec(html)) !== null && items.length < 10) {
-        const row = trMatch[1];
-        const aMatch = row.match(/<a[^>]*href=["']([^"']*)["'][^>]*>([\s\S]*?)<\/a>/i);
-        if (!aMatch) continue;
-        const href = aMatch[1].trim();
-        const title = stripHtml(aMatch[2]).trim();
-        if (!title || title.length < 5 || href.includes('#') && href.length < 5) continue;
-        // 날짜 추출 시도 (YYYY-MM-DD 또는 YYYY.MM.DD)
-        const dateMatch = row.match(/(\d{4}[-./]\d{2}[-./]\d{2})/);
-        const link = href.startsWith('http') ? href : `https://www.kcif.or.kr${href.startsWith('/') ? '' : '/'}${href}`;
-
-        items.push({
-          title,
-          link,
-          source: 'KCIF',
-          pubDate: dateMatch ? dateMatch[1].replace(/\./g, '-') : '',
-          description: '국제금융속보',
-        });
-      }
     }
 
     kcifCache = { data: items, fetchedAt: Date.now() };
     return items;
   } catch {
-    // 스크래핑 실패 시 기존 캐시 또는 SerpAPI fallback
     if (kcifCache?.data) return kcifCache.data;
-
-    // Fallback: SerpAPI로 검색
-    const data = await serpFetch({
-      engine: 'google',
-      q: 'site:kcif.or.kr 국제금융속보',
-      gl: 'kr',
-      hl: 'ko',
-      num: '10',
-      tbs: 'qdr:w',
-    });
-    if (!data) return [];
-
-    const results = (data.organic_results || []) as Array<Record<string, unknown>>;
-    const items: NewsItem[] = results.slice(0, 8).map((item) => ({
-      title: String(item.title || ''),
-      link: String(item.link || ''),
-      source: 'KCIF',
-      pubDate: String(item.date || ''),
-      description: String(item.snippet || '').slice(0, 200),
-    }));
-
-    kcifCache = { data: items, fetchedAt: Date.now() };
-    return items;
+    return [];
   }
 }
 
