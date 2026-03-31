@@ -521,19 +521,14 @@ export default function WatchlistPage() {
       {/* 헤더 */}
       <section className="pt-24 pb-6 px-6">
         <div className="max-w-7xl mx-auto">
-          <div className="flex items-start justify-between">
-            <div>
-              <h1 className="text-3xl md:text-4xl font-bold tracking-tight mb-2 bg-gradient-to-br from-gray-900 to-gray-600 bg-clip-text text-transparent">
-                Dennis
-              </h1>
-              <p className="text-xs text-gray-400 mb-1">터틀 트레이딩 워치리스트</p>
-              <p className="text-gray-500">
-                시스템 1·2 기준 자동 편입 — N값·유닛·손절가 실시간 계산
-              </p>
-            </div>
-            {data && (
-              <SettingsPanel settings={data.settings} onUpdate={updateSettings} />
-            )}
+          <div>
+            <h1 className="text-3xl md:text-4xl font-bold tracking-tight mb-2 bg-gradient-to-br from-gray-900 to-gray-600 bg-clip-text text-transparent">
+              Dennis
+            </h1>
+            <p className="text-xs text-gray-400 mb-1">터틀 트레이딩 워치리스트</p>
+            <p className="text-gray-500">
+              시스템 1·2 기준 자동 편입 — N값·유닛·손절가 실시간 계산
+            </p>
           </div>
 
           {error && (
@@ -564,8 +559,19 @@ export default function WatchlistPage() {
       {data && (
         <section className="px-6 pb-16">
           <div className="max-w-7xl mx-auto">
+            {/* Turtle Trading */}
+            <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-4">Turtle Trading</h2>
             <SystemInfo />
+
+            {/* Settings */}
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-widest">Settings</h2>
+              <SettingsPanel settings={data.settings} onUpdate={updateSettings} />
+            </div>
             <SummaryCards settings={data.settings} stocks={data.stocks} selectedCodes={selectedCodes} />
+
+            {/* Watchlist */}
+            <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-4">Watchlist</h2>
             <WatchlistTable
               stocks={data.stocks}
               selectedCodes={selectedCodes}
