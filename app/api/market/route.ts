@@ -23,6 +23,7 @@ const PERIOD_CONFIG: Record<string, { days: number; periodCode: string }> = {
   'daily':   { days: 90, periodCode: 'D' },     // 일봉: 최근 90일
   'weekly':  { days: 380, periodCode: 'W' },     // 주봉: 최근 약 52주
   'monthly': { days: 1095, periodCode: 'M' },    // 월봉: 최근 약 3년
+  '1d':      { days: 1, periodCode: 'D' },       // 1일: 인트라데이 fallback
   '3m':      { days: 100, periodCode: 'D' },     // 3개월: 일봉 선형
   '1y':      { days: 380, periodCode: 'D' },     // 1년: 일봉 선형
   '3y':      { days: 1095, periodCode: 'W' },    // 3년: 주봉 선형
