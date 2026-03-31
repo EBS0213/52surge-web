@@ -25,10 +25,46 @@ import type {
   WatchlistStock,
   ChartCandle,
 } from '../../types/stock';
+import { readFileSync, writeFileSync, existsSync } from 'fs';
+import { join } from 'path';
 
-// ── 인메모리 상태 (서버 재시작 시 초기화) ──
-let savedSettings: TurtleSettings = { ...DEFAULT_TURTLE_SETTINGS };
-let savedEntries: WatchlistEntry[] = [];
+// ── 영속 저장 (JSON 파일) ──
+const DATA_DIR = join(process.cwd(), '.data');
+const WATCHLIST_FILE = join(DATA_DIR, 'watchlist.json');
+
+interface PersistedState {
+  settings: TurtleSettings;
+  entries: WatchlistEntry[];
+}
+
+function loadState(): PersistedState {
+  try {
+    if (existsSync(WATCHLIST_FILE)) {
+      const raw = readFileSync(WATCHLIST_FILE, 'utf-8');
+      const parsed = JSON.parse(raw) as PersistedState;
+      return {
+        settings: { ...DEFAULT_TURTLE_SETTINGS, ...parsed.settings },
+        entries: parsed.entries || [],
+      };
+    }
+  } catch { /* 파일 손상 시 기본값 사용 */ }
+  return { settings: { ...DEFAULT_TURTLE_SETTINGS }, entries: [] };
+}
+
+function saveState(settings: TurtleSettings, entries: WatchlistEntry[]) {
+  try {
+    const { mkdirSync } = require('fs');
+    if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true });
+    writeFileSync(WATCHLIST_FILE, JSON.stringify({ settings, entries }, null, 2), 'utf-8');
+  } catch (err) {
+    console.error('워치리스트 저장 실패:', err);
+  }
+}
+
+// ── 상태 초기화 (파일에서 로드) ──
+const initialState = loadState();
+let savedSettings: TurtleSettings = initialState.settings;
+let savedEntries: WatchlistEntry[] = initialState.entries;
 
 // 캐시: 차트 데이터 (종목코드 -> { candles, fetchedAt })
 const chartCache = new Map<string, { candles: ChartCandle[]; fetchedAt: number }>();
@@ -194,21 +230,32 @@ export async function GET() {
       await new Promise((r) => setTimeout(r, 80));
     }
 
+    // 스캔 후 변경사항 저장
+    saveState(savedSettings, savedEntries);
+
     // 2. 각 편입 종목 상세 정보 계산
     const enrichedStocks: WatchlistStock[] = [];
-    const toRemove: string[] = [];
 
     for (const entry of savedEntries) {
       try {
         const stock = await enrichEntry(entry, savedSettings);
         enrichedStocks.push(stock);
-
-        // 매도 시그널 발생 시 편출 대상
-        if (stock.sellSignal) {
-          toRemove.push(stock.code);
-        }
       } catch {
-        // 실패 시 건너뜀
+        // enrich 실패 시에도 기본 정보로 표시 (종목이 사라지지 않도록)
+        enrichedStocks.push({
+          code: entry.code,
+          name: entry.name,
+          system: entry.system,
+          entryDate: entry.entryDate,
+          entryPrice: entry.entryPrice,
+          currentPrice: entry.entryPrice,
+          high20d: 0, low10d: 0, high55d: 0, low20d: 0,
+          nValue: 0, unitSize: 0, unitAmount: 0,
+          stopPrice: 0, riskPerShare: 0, positionPct: 0, rrr: 0,
+          pnlPct: 0, tradingDays: 0,
+          sellSignal: false,
+          sellReason: undefined,
+        });
       }
       await new Promise((r) => setTimeout(r, 80));
     }
@@ -237,6 +284,7 @@ export async function POST(request: NextRequest) {
     // 설정 업데이트
     if (body.action === 'updateSettings' && body.settings) {
       savedSettings = { ...savedSettings, ...body.settings };
+      saveState(savedSettings, savedEntries);
       return NextResponse.json({ success: true, settings: savedSettings });
     }
 
@@ -259,6 +307,7 @@ export async function POST(request: NextRequest) {
       }
 
       savedEntries.push(entry);
+      saveState(savedSettings, savedEntries);
       return NextResponse.json({ success: true, entry });
     }
 
@@ -288,6 +337,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: '해당 종목이 워치리스트에 없습니다.' }, { status: 404 });
     }
 
+    saveState(savedSettings, savedEntries);
     return NextResponse.json({ success: true, removed: code });
   } catch (error) {
     return NextResponse.json(

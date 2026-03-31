@@ -14,7 +14,7 @@ export default function Navbar({ lastUpdated, onRefresh }: NavbarProps) {
   const navItems = [
     { href: '/', label: 'Home' },
     { href: '/watchlist', label: 'Dennis' },
-    { href: '/trades', label: 'Trade Log' },
+    { href: '/trades', label: 'Ledger' },
   ];
 
   return (

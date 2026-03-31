@@ -165,38 +165,61 @@ async function fetchInvestor(code: string): Promise<InvestorData | null> {
   }
 }
 
+/** 시장 데이터 fetch (공통) */
+async function fetchMarketData(periodKey: PeriodKey) {
+  const [kospi, kosdaq, kospiInv, kosdaqInv] = await Promise.all([
+    fetchIndex('0001', 'KOSPI', periodKey),
+    fetchIndex('1001', 'KOSDAQ', periodKey),
+    fetchInvestor('0001'),
+    fetchInvestor('1001'),
+  ]);
+  return {
+    kospi: { ...kospi, investor: kospiInv },
+    kosdaq: { ...kosdaq, investor: kosdaqInv },
+    period: periodKey,
+  };
+}
+
+/** 백그라운드 캐시 갱신 */
+async function refreshCache(periodKey: PeriodKey, cacheKey: string) {
+  const result = await fetchMarketData(periodKey);
+  cacheMap.set(cacheKey, { data: result, fetchedAt: Date.now() });
+}
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const period = (searchParams.get('period') || '3m') as PeriodKey;
   const validPeriod = PERIOD_CONFIG[period] ? period : '3m';
   const cacheKey = `market_${validPeriod}`;
 
-  // 캐시 확인
+  // 캐시 확인: 유효 캐시가 있으면 바로 반환
   const cached = cacheMap.get(cacheKey);
   if (cached && Date.now() - cached.fetchedAt < CACHE_TTL) {
     return NextResponse.json(cached.data);
   }
 
   if (!isKISConfigured()) {
+    // KIS 미설정이라도 만료 캐시 있으면 반환
+    if (cached) return NextResponse.json(cached.data);
     return NextResponse.json(
       { error: 'KIS API not configured' },
       { status: 503 }
     );
   }
 
-  try {
-    const [kospi, kosdaq, kospiInv, kosdaqInv] = await Promise.all([
-      fetchIndex('0001', 'KOSPI', validPeriod),
-      fetchIndex('1001', 'KOSDAQ', validPeriod),
-      fetchInvestor('0001'),
-      fetchInvestor('1001'),
-    ]);
+  // 만료 캐시가 있으면 먼저 반환 + 백그라운드 갱신은 다음 호출에서
+  // (Stale-While-Revalidate: 오래된 데이터라도 즉시 보여주기)
+  if (cached) {
+    // 백그라운드에서 갱신 (fire-and-forget)
+    refreshCache(validPeriod, cacheKey).catch(() => {});
+    return NextResponse.json(cached.data, {
+      headers: { 'X-Cache': 'STALE' },
+    });
+  }
 
-    const result = {
-      kospi: { ...kospi, investor: kospiInv },
-      kosdaq: { ...kosdaq, investor: kosdaqInv },
-      period: validPeriod,
-    };
+  // 캐시가 아예 없을 때만 동기 fetch
+  try {
+    const result = await fetchMarketData(validPeriod);
     cacheMap.set(cacheKey, { data: result, fetchedAt: Date.now() });
     return NextResponse.json(result);
   } catch (error) {

@@ -343,7 +343,7 @@ export default function TradesPage() {
           <div className="flex items-center gap-7 ml-8">
             <Link href="/" className="text-xs tracking-wide text-white/70 hover:text-white transition-colors">Home</Link>
             <Link href="/watchlist" className="text-xs tracking-wide text-white/70 hover:text-white transition-colors">Dennis</Link>
-            <Link href="/trades" className="text-xs tracking-wide text-white font-medium transition-colors">Trade Log</Link>
+            <Link href="/trades" className="text-xs tracking-wide text-white font-medium transition-colors">Ledger</Link>
           </div>
           <div className="flex items-center gap-4 ml-auto">
             <button onClick={() => refresh()} className="text-xs text-[#86868b] hover:text-white transition-colors" title="새로고침">↻</button>
@@ -357,7 +357,7 @@ export default function TradesPage() {
           {/* 헤더 */}
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Trade Log</h1>
+              <h1 className="text-2xl font-bold text-gray-900">Ledger</h1>
               <p className="text-sm text-gray-500 mt-1">매매 기록 및 성과 추적</p>
             </div>
             <button

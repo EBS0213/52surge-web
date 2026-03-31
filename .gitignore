@@ -36,6 +36,9 @@ yarn-error.log*
 # vercel
 .vercel
 
+# 영속 데이터
+/.data/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
