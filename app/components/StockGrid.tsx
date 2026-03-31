@@ -41,12 +41,14 @@ function FilterPanel({
   filters,
   onApply,
   onReset,
+  onClose,
   matchCount,
   totalCount,
 }: {
   filters: FilterState;
   onApply: (f: FilterState) => void;
   onReset: () => void;
+  onClose: () => void;
   matchCount: number;
   totalCount: number;
 }) {
@@ -64,6 +66,7 @@ function FilterPanel({
 
   const handleApply = () => {
     onApply(draft);
+    onClose();
   };
 
   const handleReset = () => {
@@ -143,9 +146,9 @@ function FilterPanel({
       <div className="mt-3 flex justify-end">
         <button
           onClick={handleApply}
-          className="px-6 py-2 bg-gray-900 text-white text-sm font-semibold rounded-full hover:bg-gray-800 transition-colors"
+          className="px-4 py-1.5 bg-gray-900 text-white text-xs font-medium rounded-full hover:bg-gray-800 transition-colors"
         >
-          신고가
+          적용
         </button>
       </div>
     </div>
@@ -358,6 +361,7 @@ export default function StockGrid({
             filters={filters}
             onApply={handleFilterChange}
             onReset={() => handleFilterChange(DEFAULT_FILTERS)}
+            onClose={() => setShowFilter(false)}
             matchCount={stocks.length}
             totalCount={data.total_found}
           />
