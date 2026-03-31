@@ -12,7 +12,7 @@ const APP_SECRET = process.env.KIS_APP_SECRET || '';
 
 // 캐시 (5분) - 기간별 캐시
 const cacheMap = new Map<string, { data: unknown; fetchedAt: number }>();
-const CACHE_TTL = 5 * 60 * 1000;
+const CACHE_TTL = 1 * 60 * 1000; // 1분
 
 // 기간 설정
 type PeriodKey = '1w' | '1m' | '3m' | '1y' | '3y';

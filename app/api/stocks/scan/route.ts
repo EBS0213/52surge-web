@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 
 const BACKEND_URL = process.env.BACKEND_API_URL || 'http://13.124.156.73:8000';
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5분 캐시
+const CACHE_TTL_MS = 1 * 60 * 1000; // 1분 캐시
 
 // 인메모리 캐시
 let cachedData: { data: unknown; timestamp: number; key: string } | null = null;

@@ -32,11 +32,11 @@ let savedEntries: WatchlistEntry[] = [];
 
 // 캐시: 차트 데이터 (종목코드 -> { candles, fetchedAt })
 const chartCache = new Map<string, { candles: ChartCandle[]; fetchedAt: number }>();
-const CHART_CACHE_TTL = 5 * 60 * 1000; // 5분
+const CHART_CACHE_TTL = 1 * 60 * 1000; // 1분
 
 // 스캔 데이터 캐시
 let scanCache: { data: { stocks: Array<{ code: string; name: string; close: number }> }; fetchedAt: number } | null = null;
-const SCAN_CACHE_TTL = 5 * 60 * 1000;
+const SCAN_CACHE_TTL = 1 * 60 * 1000; // 1분
 
 /** 차트 데이터 가져오기 (캐시 포함) */
 async function getCachedChart(code: string, days: number = 90): Promise<ChartCandle[]> {
