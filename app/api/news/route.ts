@@ -232,32 +232,99 @@ async function fetchBaiduNews(): Promise<NewsItem[]> {
 }
 
 // ────────────────────────────────────────
-// KCIF 국제금융센터 보고서 (SerpAPI google 엔진)
+// KCIF 국제금융센터 — 국제금융속보 직접 스크래핑
 // ────────────────────────────────────────
 async function fetchKcifReports(): Promise<NewsItem[]> {
-  if (isFresh(kcifCache, SERP_CACHE_TTL)) return kcifCache.data;
+  if (isFresh(kcifCache, RSS_CACHE_TTL)) return kcifCache.data;
 
-  const data = await serpFetch({
-    engine: 'google',
-    q: 'site:kcif.or.kr 보고서',
-    gl: 'kr',
-    hl: 'ko',
-    num: '10',
-    tbs: 'qdr:w', // 최근 1주일
-  });
-  if (!data) return (kcifCache as Cache<NewsItem[]> | null)?.data || [];
+  try {
+    const res = await fetch('https://www.kcif.or.kr/annual/newsflashList', {
+      signal: AbortSignal.timeout(10000),
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; OURTLE/1.0)',
+        'Accept': 'text/html,application/xhtml+xml',
+      },
+    });
+    if (!res.ok) return (kcifCache as Cache<NewsItem[]> | null)?.data || [];
+    const html = await res.text();
 
-  const results = (data.organic_results || []) as Array<Record<string, unknown>>;
-  const items: NewsItem[] = results.slice(0, 8).map((item) => ({
-    title: String(item.title || ''),
-    link: String(item.link || ''),
-    source: 'KCIF',
-    pubDate: String(item.date || ''),
-    description: String(item.snippet || '').slice(0, 200),
-  }));
+    const items: NewsItem[] = [];
 
-  kcifCache = { data: items, fetchedAt: Date.now() };
-  return items;
+    // 게시판 테이블에서 행 추출 시도 (여러 패턴)
+    // 패턴 1: <a href="...newsflashView?articleNo=123...">제목</a> + 날짜
+    const linkRegex = /<a[^>]*href=["']([^"']*newsflash[^"']*)["'][^>]*>([\s\S]*?)<\/a>/gi;
+    let match;
+    while ((match = linkRegex.exec(html)) !== null && items.length < 10) {
+      const href = match[1].trim();
+      const title = stripHtml(match[2]).trim();
+      if (!title || title.length < 5) continue;
+
+      // 절대 URL 처리
+      const link = href.startsWith('http') ? href : `https://www.kcif.or.kr${href.startsWith('/') ? '' : '/'}${href}`;
+
+      items.push({
+        title,
+        link,
+        source: 'KCIF',
+        pubDate: '',
+        description: '국제금융속보',
+      });
+    }
+
+    // 패턴 1로 못 찾으면 패턴 2: 일반적 게시판 링크
+    if (items.length === 0) {
+      const trRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+      let trMatch;
+      while ((trMatch = trRegex.exec(html)) !== null && items.length < 10) {
+        const row = trMatch[1];
+        const aMatch = row.match(/<a[^>]*href=["']([^"']*)["'][^>]*>([\s\S]*?)<\/a>/i);
+        if (!aMatch) continue;
+        const href = aMatch[1].trim();
+        const title = stripHtml(aMatch[2]).trim();
+        if (!title || title.length < 5 || href.includes('#') && href.length < 5) continue;
+        // 날짜 추출 시도 (YYYY-MM-DD 또는 YYYY.MM.DD)
+        const dateMatch = row.match(/(\d{4}[-./]\d{2}[-./]\d{2})/);
+        const link = href.startsWith('http') ? href : `https://www.kcif.or.kr${href.startsWith('/') ? '' : '/'}${href}`;
+
+        items.push({
+          title,
+          link,
+          source: 'KCIF',
+          pubDate: dateMatch ? dateMatch[1].replace(/\./g, '-') : '',
+          description: '국제금융속보',
+        });
+      }
+    }
+
+    kcifCache = { data: items, fetchedAt: Date.now() };
+    return items;
+  } catch {
+    // 스크래핑 실패 시 기존 캐시 또는 SerpAPI fallback
+    if (kcifCache?.data) return kcifCache.data;
+
+    // Fallback: SerpAPI로 검색
+    const data = await serpFetch({
+      engine: 'google',
+      q: 'site:kcif.or.kr 국제금융속보',
+      gl: 'kr',
+      hl: 'ko',
+      num: '10',
+      tbs: 'qdr:w',
+    });
+    if (!data) return [];
+
+    const results = (data.organic_results || []) as Array<Record<string, unknown>>;
+    const items: NewsItem[] = results.slice(0, 8).map((item) => ({
+      title: String(item.title || ''),
+      link: String(item.link || ''),
+      source: 'KCIF',
+      pubDate: String(item.date || ''),
+      description: String(item.snippet || '').slice(0, 200),
+    }));
+
+    kcifCache = { data: items, fetchedAt: Date.now() };
+    return items;
+  }
 }
 
 // ────────────────────────────────────────
@@ -338,9 +405,9 @@ export async function GET(request: Request) {
         const [rss, naver, kcif] = await Promise.all([
           fetchRssNews(),
           hasSerpKey ? fetchNaverNews() : Promise.resolve([]),
-          hasSerpKey ? fetchKcifReports() : Promise.resolve([]),
+          fetchKcifReports(),
         ]);
-        const combined = dedup(sortByDate([...rss, ...naver, ...kcif])).slice(0, 20);
+        const combined = dedup(sortByDate([...rss, ...naver, ...kcif])).slice(0, 25);
         return NextResponse.json({ items: combined, tab: 'korea' });
       }
       case 'worldwide': {
@@ -354,18 +421,14 @@ export async function GET(request: Request) {
       }
       case 'all': {
         const hasSerpKey = !!getSerpKey();
-        const [rss, naver, google, baidu, kcif] = await Promise.all([
+        const [rss, naver, kcif] = await Promise.all([
           fetchRssNews(),
           hasSerpKey ? fetchNaverNews() : Promise.resolve([]),
-          hasSerpKey ? fetchGoogleNews() : Promise.resolve([]),
-          hasSerpKey ? fetchBaiduNews() : Promise.resolve([]),
-          hasSerpKey ? fetchKcifReports() : Promise.resolve([]),
+          fetchKcifReports(),
         ]);
-        const korea = dedup(sortByDate([...rss, ...naver, ...kcif])).slice(0, 20);
-        const worldwide = dedup([...google, ...baidu]).slice(0, 15);
+        const korea = dedup(sortByDate([...rss, ...naver, ...kcif])).slice(0, 25);
         return NextResponse.json({
-          korea,
-          worldwide,
+          items: korea,
           hasSerpKey,
           tab: 'all',
         });

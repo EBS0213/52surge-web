@@ -11,9 +11,18 @@ interface NewsItem {
   translated?: boolean;
 }
 
-type Tab = 'korea' | 'worldwide';
-
 const ITEMS_PER_PAGE = 9; // 3x3
+
+/** 매체 필터 옵션 */
+const SOURCE_FILTERS: { key: string; label: string; match: (s: string) => boolean }[] = [
+  { key: 'all', label: '전체', match: () => true },
+  { key: 'hankyung', label: '한경', match: (s) => s.includes('한국경제') || s.includes('한경') },
+  { key: 'maekyung', label: '매경', match: (s) => s.includes('매일경제') || s.includes('매경') },
+  { key: 'yonhap', label: '연합', match: (s) => s.includes('연합뉴스') },
+  { key: 'policy', label: '정책브리핑', match: (s) => s.includes('정책브리핑') },
+  { key: 'naver', label: '네이버', match: (s) => s.includes('네이버') || s.includes('Naver') },
+  { key: 'kcif', label: 'KCIF', match: (s) => s.includes('KCIF') || s.includes('국제금융') },
+];
 
 /** 상대 시간 표시 */
 function timeAgo(dateStr: string): string {
@@ -47,7 +56,7 @@ function sourceBadge(source: string) {
 }
 
 /** 확장 가능한 뉴스 카드 */
-function NewsCard({ item, index, tab }: { item: NewsItem; index: number; tab: string }) {
+function NewsCard({ item, index }: { item: NewsItem; index: number }) {
   const [expanded, setExpanded] = useState(false);
   const [content, setContent] = useState<string | null>(null);
   const [summary, setSummary] = useState<string | null>(null);
@@ -84,7 +93,7 @@ function NewsCard({ item, index, tab }: { item: NewsItem; index: number; tab: st
 
   return (
     <div
-      key={`${tab}-${item.title}-${index}`}
+      key={`news-${item.title}-${index}`}
       className={`group bg-white rounded-2xl border transition-all duration-300 cursor-pointer ${
         expanded
           ? 'border-blue-200 shadow-lg col-span-1 md:col-span-2 lg:col-span-3'
@@ -190,29 +199,21 @@ function NewsCard({ item, index, tab }: { item: NewsItem; index: number; tab: st
 }
 
 export default function NewsSection() {
-  const [tab, setTab] = useState<Tab>('korea');
   const [page, setPage] = useState(1);
   const [slideDir, setSlideDir] = useState<'left' | 'right' | null>(null);
-  const [news, setNews] = useState<Record<string, NewsItem[]>>({
-    korea: [],
-    worldwide: [],
-  });
+  const [allNews, setAllNews] = useState<NewsItem[]>([]);
+  const [sourceFilter, setSourceFilter] = useState('all');
   const [loading, setLoading] = useState(true);
-  const [hasSerpKey, setHasSerpKey] = useState(false);
   const isMounted = useRef(true);
   const gridRef = useRef<HTMLDivElement>(null);
 
   const fetchAllNews = useCallback(async () => {
     try {
-      const res = await fetch('/api/news?tab=all');
+      const res = await fetch('/api/news?tab=korea');
       if (!res.ok) return;
       const data = await res.json();
       if (isMounted.current) {
-        setNews({
-          korea: data.korea || [],
-          worldwide: data.worldwide || [],
-        });
-        setHasSerpKey(!!data.hasSerpKey);
+        setAllNews(data.items || []);
       }
     } catch { /* ignore */ }
     finally { if (isMounted.current) setLoading(false); }
@@ -225,13 +226,26 @@ export default function NewsSection() {
     return () => { isMounted.current = false; clearInterval(interval); };
   }, [fetchAllNews]);
 
-  const items = news[tab] || [];
+  // 매체 필터 적용
+  const filteredNews = sourceFilter === 'all'
+    ? allNews
+    : allNews.filter((item) => {
+        const filter = SOURCE_FILTERS.find((f) => f.key === sourceFilter);
+        return filter ? filter.match(item.source) : true;
+      });
+
+  // 실제 뉴스가 있는 매체만 필터 목록에 표시
+  const availableSources = SOURCE_FILTERS.filter((f) =>
+    f.key === 'all' || allNews.some((item) => f.match(item.source))
+  );
+
+  const items = filteredNews;
   const totalPages = Math.max(1, Math.ceil(items.length / ITEMS_PER_PAGE));
   const currentItems = items.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
 
-  // 탭 변경 시 페이지 리셋
-  const handleTabChange = (newTab: Tab) => {
-    setTab(newTab);
+  // 필터 변경 시 페이지 리셋
+  const handleFilterChange = (key: string) => {
+    setSourceFilter(key);
     setPage(1);
     setSlideDir(null);
   };
@@ -270,46 +284,28 @@ export default function NewsSection() {
     );
   }
 
-  const totalItems = Object.values(news).flat().length;
-  if (totalItems === 0) return null;
+  if (allNews.length === 0) return null;
 
   return (
     <section className="pt-6 pb-4 px-6">
       <div className="max-w-[980px] mx-auto">
-        {/* 헤더 + 탭 */}
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-6">
-          <div>
-            <h2 className="text-2xl font-bold text-[#1d1d1f]">경제 뉴스</h2>
-            <p className="text-sm text-[#86868b] mt-1">
-              {tab === 'korea'
-                ? '한경 · 매경 · 연합 · 정책브리핑 · 네이버 · KCIF'
-                : 'Google News · 바이두 · 한국어 번역'}
-            </p>
-          </div>
-
-          <div className="flex gap-1 bg-gray-100 rounded-full p-0.5 self-start sm:self-auto">
-            <button
-              onClick={() => handleTabChange('korea')}
-              className={`px-5 py-1.5 text-[13px] font-medium rounded-full transition-all ${
-                tab === 'korea'
-                  ? 'bg-white text-[#1d1d1f] shadow-sm'
-                  : 'text-[#86868b] hover:text-[#1d1d1f]'
-              }`}
-            >
-              한국
-            </button>
-            {(hasSerpKey || news.worldwide.length > 0) && (
+        {/* 헤더 + 매체 필터 */}
+        <div className="mb-6">
+          <h2 className="text-2xl font-bold text-[#1d1d1f]">경제 뉴스</h2>
+          <div className="flex items-center gap-1.5 mt-3 flex-wrap">
+            {availableSources.map(({ key, label }) => (
               <button
-                onClick={() => handleTabChange('worldwide')}
-                className={`px-5 py-1.5 text-[13px] font-medium rounded-full transition-all ${
-                  tab === 'worldwide'
-                    ? 'bg-white text-[#1d1d1f] shadow-sm'
-                    : 'text-[#86868b] hover:text-[#1d1d1f]'
+                key={key}
+                onClick={() => handleFilterChange(key)}
+                className={`px-3 py-1 text-[12px] font-medium rounded-full transition-all ${
+                  sourceFilter === key
+                    ? 'bg-[#1d1d1f] text-white'
+                    : 'bg-gray-100 text-[#86868b] hover:bg-gray-200 hover:text-[#1d1d1f]'
                 }`}
               >
-                글로벌
+                {label}
               </button>
-            )}
+            ))}
           </div>
         </div>
 
@@ -324,14 +320,14 @@ export default function NewsSection() {
             }`}
           >
             {currentItems.map((item, i) => (
-              <NewsCard key={`${tab}-${page}-${item.title}-${i}`} item={item} index={i} tab={tab} />
+              <NewsCard key={`${sourceFilter}-${page}-${item.title}-${i}`} item={item} index={i} />
             ))}
           </div>
         ) : (
           <div className="text-center py-12 text-[#86868b]">
             <p className="text-sm">
-              {tab === 'worldwide'
-                ? 'SerpAPI 키가 설정되지 않았습니다.'
+              {sourceFilter !== 'all'
+                ? `${SOURCE_FILTERS.find(f => f.key === sourceFilter)?.label || ''} 뉴스가 없습니다.`
                 : '뉴스를 불러올 수 없습니다.'}
             </p>
           </div>
