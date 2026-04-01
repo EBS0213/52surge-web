@@ -1,6 +1,6 @@
 """
 52주 신고가 자동 스캔 + 텔레그램 발송
-- 장중(09:00~16:00 KST): 10분 간격 스캔 → scan_results.json 저장
+- 장중(09:00~16:00 KST): 5분 간격 스캔 → scan_results.json 저장
 - 장마감(16:00 KST): 텔레그램 발송
 """
 
@@ -112,7 +112,7 @@ def format_telegram_message(result):
 
 
 def market_scan():
-    """장중 스캔 (10분 간격) — 파일 저장만, 텔레그램 발송 안 함"""
+    """장중 스캔 (5분 간격) — 파일 저장만, 텔레그램 발송 안 함"""
     if not is_market_hours():
         return
 
@@ -200,9 +200,9 @@ def test_run():
 def run_scheduler():
     """스케줄러 실행"""
     # ── EC2는 UTC 기준이므로 KST 시간을 UTC로 변환 ──
-    # KST 09:00~15:50 → UTC 00:00~06:50 (10분 간격)
+    # KST 09:00~15:55 → UTC 00:00~06:55 (5분 간격)
     for hour in range(0, 7):  # UTC 0~6
-        for minute in range(0, 60, 10):
+        for minute in range(0, 60, 5):
             time_str = f"{hour:02d}:{minute:02d}"
             schedule.every().day.at(time_str).do(market_scan)
     # UTC 07:00 = KST 16:00 (마지막 장중 스캔 + 텔레그램)
@@ -215,7 +215,7 @@ def run_scheduler():
     print("🤖 52주 신고가 자동 스캔 봇 시작")
     print("="*60)
     print(f"🕐 현재 시간: {kst_now.strftime('%Y-%m-%d %H:%M:%S')} KST")
-    print("📅 장중 스캔: 09:00~16:00 KST, 10분 간격")
+    print("📅 장중 스캔: 09:00~16:00 KST, 5분 간격")
     print("📱 텔레그램: 16:00 KST 장마감 시 1회 발송")
     print("🧹 편출 정리: 16:10 KST 워치리스트 편출→아카이브")
     print("📱 발송처: https://t.me/UlsanWhales")
@@ -238,7 +238,7 @@ def run_scheduler():
     # 무한 루프
     while True:
         schedule.run_pending()
-        time.sleep(30)  # 30초마다 체크 (10분 간격이므로 충분)
+        time.sleep(15)  # 15초마다 체크 (5분 간격)
 
 
 if __name__ == "__main__":

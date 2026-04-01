@@ -1,6 +1,6 @@
 """
 52주 신고가 스캔 - 최적화 버전
-시가총액 상위 1000개 + 병렬 처리
+시가총액 상위 2000개 + 병렬 처리
 """
 
 import pandas as pd
@@ -135,12 +135,12 @@ def scan_52week_highs(
 ) -> Dict:
     """
     52주 신고가 스캔 - 최적화 버전
-    시가총액 상위 1000개 + 병렬 처리
+    시가총액 상위 2000개 + 병렬 처리
     """
     try:
         print("="*60)
         print("52주 신고가 스캔 - 최적화 버전")
-        print("시가총액 상위 1000개 종목 + 병렬 처리")
+        print("시가총액 상위 2000개 종목 + 병렬 처리")
         print("="*60)
 
         # 최근 거래일
@@ -164,8 +164,8 @@ def scan_52week_highs(
         elif 'Market Cap' in stock_list.columns:
             stock_list = stock_list.sort_values('Market Cap', ascending=False)
 
-        # 상위 1000개
-        top_stocks = stock_list.head(1000)
+        # 상위 2000개
+        top_stocks = stock_list.head(2000)
 
         print(f"✅ 시가총액 상위 {len(top_stocks)}개 종목 선정")
 
@@ -220,7 +220,7 @@ def scan_52week_highs(
                 "min_volume": min_volume,
                 "min_trading_value": min_trading_value,
                 "min_rsi": min_rsi,
-                "note": "시가총액 상위 1000개 종목"
+                "note": "시가총액 상위 2000개 종목"
             },
             "stocks": results
         }
