@@ -65,10 +65,21 @@ function formatPrice(v: number): string {
   return v.toLocaleString();
 }
 
+interface InvestorData {
+  date: string;
+  frgn: number;
+  inst: number;
+  prsn: number;
+  frgnValue: number;
+  instValue: number;
+  prsnValue: number;
+}
+
 export default function StockChart({ stockCode, stockName, onClose }: StockChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [candles, setCandles] = useState<ChartCandle[]>([]);
   const [info, setInfo] = useState<StockInfo | null>(null);
+  const [investor, setInvestor] = useState<InvestorData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [period, setPeriod] = useState<PeriodKey>('daily');
@@ -86,7 +97,7 @@ export default function StockChart({ stockCode, stockName, onClose }: StockChart
     return () => observer.disconnect();
   }, []);
 
-  // 데이터 fetching
+  // 차트 + 기업정보 fetching
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -106,6 +117,14 @@ export default function StockChart({ stockCode, stockName, onClose }: StockChart
       setLoading(false);
     }
   }, [stockCode, period]);
+
+  // 투자자 수급 fetching (별도 — 한번만)
+  useEffect(() => {
+    fetch(`/api/kis/investor?code=${stockCode}`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => { if (data) setInvestor(data); })
+      .catch(() => {});
+  }, [stockCode]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -267,7 +286,7 @@ export default function StockChart({ stockCode, stockName, onClose }: StockChart
 
         {/* Company Info */}
         {info && (
-          <div className="px-6 pb-5 border-t border-gray-100 pt-4">
+          <div className="px-6 pb-4 border-t border-gray-100 pt-4">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-3 text-sm">
               <InfoItem label="시가총액" value={formatBillion(Number(info.hts_avls) || 0)} />
               <InfoItem label="상장주수" value={`${formatKRW(Number(info.lstn_stcn) || 0)}주`} />
@@ -284,6 +303,18 @@ export default function StockChart({ stockCode, stockName, onClose }: StockChart
             </div>
           </div>
         )}
+
+        {/* 투자자 수급 */}
+        {investor && (
+          <div className="px-6 pb-5 border-t border-gray-100 pt-4">
+            <h4 className="text-xs font-semibold text-gray-500 mb-3">투자자 매매동향 (당일)</h4>
+            <div className="grid grid-cols-3 gap-3">
+              <InvestorItem label="외국인" qty={investor.frgn} value={investor.frgnValue} />
+              <InvestorItem label="기관" qty={investor.inst} value={investor.instValue} />
+              <InvestorItem label="개인" qty={investor.prsn} value={investor.prsnValue} />
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -295,6 +326,34 @@ function InfoItem({ label, value, highlight }: { label: string; value: string; h
     <div>
       <span className="text-xs text-gray-400">{label}</span>
       <p className={`font-medium ${valueColor}`}>{value}</p>
+    </div>
+  );
+}
+
+function InvestorItem({ label, qty, value }: { label: string; qty: number; value: number }) {
+  const isBuy = qty > 0;
+  const color = qty === 0 ? 'text-gray-500' : isBuy ? 'text-red-500' : 'text-blue-500';
+  const bg = qty === 0 ? 'bg-gray-50' : isBuy ? 'bg-red-50' : 'bg-blue-50';
+  const arrow = qty === 0 ? '' : isBuy ? '순매수' : '순매도';
+  const absQty = Math.abs(qty);
+  const absValue = Math.abs(value);
+
+  // 금액 포맷
+  const fmtValue = absValue >= 100_000_000
+    ? `${(absValue / 100_000_000).toFixed(0)}억`
+    : absValue >= 10_000
+    ? `${(absValue / 10_000).toFixed(0)}만`
+    : absValue.toLocaleString();
+
+  return (
+    <div className={`rounded-lg px-3 py-2.5 ${bg}`}>
+      <span className="text-xs text-gray-500 block mb-1">{label}</span>
+      <p className={`text-sm font-bold ${color}`}>
+        {arrow} {absQty.toLocaleString()}주
+      </p>
+      {absValue > 0 && (
+        <p className={`text-xs mt-0.5 ${color} opacity-70`}>{fmtValue}원</p>
+      )}
     </div>
   );
 }

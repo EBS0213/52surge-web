@@ -207,34 +207,21 @@ async function fetchIndexIntraday(code: string, name: string): Promise<IndexData
   };
 }
 
-/** 업종 기간별 시세 (일/주/월봉) */
-async function fetchIndex(code: string, name: string, periodKey: PeriodKey = '3m'): Promise<IndexData> {
-  // 1일 → 최근 10거래일 일봉 (KIS 업종 분봉 API 미지원)
+/** 날짜 포맷 헬퍼 */
+const fmtDate = (d: Date) =>
+  `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
 
-  const token = await getAccessToken();
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json; charset=utf-8',
-    authorization: `Bearer ${token}`,
-    appkey: APP_KEY,
-    appsecret: APP_SECRET,
-    tr_id: 'FHKUP03500100',
-    custtype: 'P',
-  };
-
-  const config = PERIOD_CONFIG[periodKey];
-  const endDate = new Date();
-  const startDate = new Date();
-  startDate.setDate(startDate.getDate() - config.days);
-
-  const fmt = (d: Date) =>
-    `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
-
+/** 단일 페이지 지수 데이터 요청 */
+async function fetchIndexPage(
+  code: string, token: string, headers: Record<string, string>,
+  startDate: Date, endDate: Date, periodCode: string
+): Promise<{ output1: Record<string, string>; chart: CandleData[] }> {
   const params = new URLSearchParams({
     FID_COND_MRKT_DIV_CODE: 'U',
     FID_INPUT_ISCD: code,
-    FID_INPUT_DATE_1: fmt(startDate),
-    FID_INPUT_DATE_2: fmt(endDate),
-    FID_PERIOD_DIV_CODE: config.periodCode,
+    FID_INPUT_DATE_1: fmtDate(startDate),
+    FID_INPUT_DATE_2: fmtDate(endDate),
+    FID_PERIOD_DIV_CODE: periodCode,
   });
 
   const res = await fetch(
@@ -242,10 +229,7 @@ async function fetchIndex(code: string, name: string, periodKey: PeriodKey = '3m
     { headers, cache: 'no-store' }
   );
 
-  if (!res.ok) {
-    throw new Error(`Index fetch failed: ${res.status}`);
-  }
-
+  if (!res.ok) throw new Error(`Index fetch failed: ${res.status}`);
   const data = await res.json();
   const output1 = data.output1 || {};
   const output2 = (data.output2 || []) as Record<string, string>[];
@@ -258,15 +242,81 @@ async function fetchIndex(code: string, name: string, periodKey: PeriodKey = '3m
       low: Number(item.bstp_nmix_lwpr) || Number(item.bstp_nmix_prpr),
       close: Number(item.bstp_nmix_prpr),
     }))
-    .filter((c) => c.close > 0)
-    .reverse();
+    .filter((c) => c.close > 0);
+
+  return { output1, chart };
+}
+
+/** 업종 기간별 시세 (일/주/월봉) — 페이지네이션으로 충분한 데이터 확보 */
+async function fetchIndex(code: string, name: string, periodKey: PeriodKey = '3m'): Promise<IndexData> {
+  const token = await getAccessToken();
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json; charset=utf-8',
+    authorization: `Bearer ${token}`,
+    appkey: APP_KEY,
+    appsecret: APP_SECRET,
+    tr_id: 'FHKUP03500100',
+    custtype: 'P',
+  };
+
+  const config = PERIOD_CONFIG[periodKey];
+  const today = new Date();
+
+  // 일봉(daily)일 때 MA50 계산에 충분한 데이터 확보를 위해 페이지네이션
+  // KIS API는 한 호출에 약 100건 제한 → 2번 호출하여 합산
+  const needsPagination = periodKey === 'daily' && config.days >= 200;
+
+  if (needsPagination) {
+    // 1차: 최근 200일
+    const end1 = today;
+    const start1 = new Date();
+    start1.setDate(today.getDate() - 200);
+
+    // 2차: 200~400일 전
+    const end2 = new Date();
+    end2.setDate(today.getDate() - 201);
+    const start2 = new Date();
+    start2.setDate(today.getDate() - 400);
+
+    // 병렬 호출 (API rate limit 고려하여 순차 처리)
+    const page1 = await fetchIndexPage(code, token, headers, start1, end1, config.periodCode);
+    await new Promise((r) => setTimeout(r, 100)); // rate limit
+    const page2 = await fetchIndexPage(code, token, headers, start2, end2, config.periodCode);
+
+    // 합산 (과거→최신 정렬) + 중복 제거
+    const allChart = [...page2.chart, ...page1.chart].reverse(); // KIS는 최신→과거 순 반환
+    const seen = new Set<string>();
+    const chart = allChart.filter((c) => {
+      if (seen.has(c.date)) return false;
+      seen.add(c.date);
+      return true;
+    });
+
+    console.log(`[market] ${name} paginated: page1=${page1.chart.length}, page2=${page2.chart.length}, merged=${chart.length}`);
+
+    return {
+      name,
+      code,
+      price: Number(page1.output1.bstp_nmix_prpr) || (chart.length > 0 ? chart[chart.length - 1].close : 0),
+      change: Number(page1.output1.bstp_nmix_prdy_vrss) || 0,
+      changeRate: Number(page1.output1.bstp_nmix_prdy_ctrt) || 0,
+      chart,
+    };
+  }
+
+  // 일봉 외 (주봉/월봉/단기) → 단일 호출
+  const startDate = new Date();
+  startDate.setDate(today.getDate() - config.days);
+
+  const page = await fetchIndexPage(code, token, headers, startDate, today, config.periodCode);
+  const chart = page.chart.reverse(); // 과거→최신
 
   return {
     name,
     code,
-    price: Number(output1.bstp_nmix_prpr) || (chart.length > 0 ? chart[chart.length - 1].close : 0),
-    change: Number(output1.bstp_nmix_prdy_vrss) || 0,
-    changeRate: Number(output1.bstp_nmix_prdy_ctrt) || 0,
+    price: Number(page.output1.bstp_nmix_prpr) || (chart.length > 0 ? chart[chart.length - 1].close : 0),
+    change: Number(page.output1.bstp_nmix_prdy_vrss) || 0,
+    changeRate: Number(page.output1.bstp_nmix_prdy_ctrt) || 0,
     chart,
   };
 }
@@ -291,14 +341,12 @@ async function fetchInvestor(code: string): Promise<InvestorData | null> {
     };
 
     const today = new Date();
-    const fmt = (d: Date) =>
-      `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
 
     const params = new URLSearchParams({
       FID_COND_MRKT_DIV_CODE: 'U',
       FID_INPUT_ISCD: code,
-      FID_INPUT_DATE_1: fmt(today),
-      FID_INPUT_DATE_2: fmt(today),
+      FID_INPUT_DATE_1: fmtDate(today),
+      FID_INPUT_DATE_2: fmtDate(today),
       FID_PERIOD_DIV_CODE: 'D',
     });
 

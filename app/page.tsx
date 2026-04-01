@@ -9,12 +9,13 @@ import MarketOverview from './components/MarketOverview';
 import StockGrid from './components/StockGrid';
 import StockChart from './components/StockChart';
 import { SkeletonCard, SkeletonMarketOverview } from './components/SkeletonCard';
+import RankingSection from './components/RankingSection';
 import NewsSection from './components/NewsSection';
 import type { Stock } from './types/stock';
 
 export default function Home() {
   const { data, loading, error, lastUpdated, refresh } = useStockData(20);
-  const [selectedStock, setSelectedStock] = useState<Stock | null>(null);
+  const [selectedStock, setSelectedStock] = useState<{ code: string; name: string } | null>(null);
 
   const stockCodes = useMemo(
     () => (data?.stocks || []).slice(0, 10).map((s) => s.code),
@@ -64,10 +65,13 @@ export default function Home() {
             data={data}
             realtimePrices={realtimePrices}
             isRealtimeAvailable={isRealtimeAvailable}
-            onStockClick={setSelectedStock}
+            onStockClick={(s) => setSelectedStock({ code: s.code, name: s.name })}
           />
         </>
       )}
+
+      {/* 시장 순위 (거래량/등락률/신고가) */}
+      <RankingSection onStockClick={setSelectedStock} />
 
       {/* 경제 뉴스 */}
       <NewsSection />

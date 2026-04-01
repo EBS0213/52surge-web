@@ -115,6 +115,156 @@ export async function getDailyChart(
   })).reverse(); // 오래된 날짜부터 정렬
 }
 
+// ───────────────────────────────────────────────
+// 추가 API 함수들
+// ───────────────────────────────────────────────
+
+/** 거래량 순위 (FHPST01710000) */
+export async function getVolumeRank(marketCode: string = 'J') {
+  const headers = await makeHeaders('FHPST01710000');
+  const params = new URLSearchParams({
+    FID_COND_MRKT_DIV_CODE: marketCode, // J:전체, 0:코스피, 1:코스닥
+    FID_COND_SCR_DIV_CODE: '20101',
+    FID_INPUT_ISCD: '0000',
+    FID_DIV_CLS_CODE: '0',
+    FID_BLNG_CLS_CODE: '0',
+    FID_TRGT_CLS_CODE: '111111111',
+    FID_TRGT_EXLS_CLS_CODE: '000000',
+    FID_INPUT_PRICE_1: '0',
+    FID_INPUT_PRICE_2: '0',
+    FID_VOL_CNT: '0',
+    FID_INPUT_DATE_1: '',
+  });
+
+  const res = await fetch(
+    `${BASE_URL}/uapi/domestic-stock/v1/quotations/volume-rank?${params}`,
+    { headers, cache: 'no-store' }
+  );
+  if (!res.ok) throw new Error(`Volume rank failed: ${res.status}`);
+  const data = await res.json();
+  return (data.output || []).slice(0, 20).map((item: Record<string, string>) => ({
+    rank: Number(item.data_rank),
+    code: item.mksc_shrn_iscd,
+    name: item.hts_kor_isnm,
+    price: Number(item.stck_prpr),
+    change: Number(item.prdy_vrss),
+    changeRate: Number(item.prdy_ctrt),
+    volume: Number(item.acml_vol),
+    tradingValue: Number(item.acml_tr_pbmn),
+  }));
+}
+
+/** 등락률 순위 (FHPST01700000) */
+export async function getFluctuationRank(direction: 'up' | 'down' = 'up', marketCode: string = 'J') {
+  const headers = await makeHeaders('FHPST01700000');
+  const params = new URLSearchParams({
+    FID_COND_MRKT_DIV_CODE: marketCode,
+    FID_COND_SCR_DIV_CODE: '20170',
+    FID_INPUT_ISCD: '0000',
+    FID_RANK_SORT_CLS_CODE: direction === 'up' ? '0' : '1',
+    FID_INPUT_CNT_1: '0',
+    FID_PRC_CLS_CODE: '0',
+    FID_INPUT_PRICE_1: '0',
+    FID_INPUT_PRICE_2: '0',
+    FID_VOL_CNT: '0',
+    FID_TRGT_CLS_CODE: '0',
+    FID_TRGT_EXLS_CLS_CODE: '0',
+    FID_DIV_CLS_CODE: '0',
+    FID_RSFL_RATE1: '',
+    FID_RSFL_RATE2: '',
+  });
+
+  const res = await fetch(
+    `${BASE_URL}/uapi/domestic-stock/v1/ranking/fluctuation?${params}`,
+    { headers, cache: 'no-store' }
+  );
+  if (!res.ok) throw new Error(`Fluctuation rank failed: ${res.status}`);
+  const data = await res.json();
+  return (data.output || []).slice(0, 20).map((item: Record<string, string>) => ({
+    rank: Number(item.data_rank),
+    code: item.stck_shrn_iscd || item.mksc_shrn_iscd,
+    name: item.hts_kor_isnm,
+    price: Number(item.stck_prpr),
+    change: Number(item.prdy_vrss),
+    changeRate: Number(item.prdy_ctrt),
+    volume: Number(item.acml_vol),
+    tradingValue: Number(item.acml_tr_pbmn),
+  }));
+}
+
+/** 종목별 투자자 매매동향 (FHKST01010900) */
+export async function getStockInvestor(stockCode: string) {
+  const headers = await makeHeaders('FHKST01010900');
+  const today = new Date();
+  const fmt = (d: Date) =>
+    `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+
+  const params = new URLSearchParams({
+    FID_COND_MRKT_DIV_CODE: 'J',
+    FID_INPUT_ISCD: stockCode,
+  });
+
+  const res = await fetch(
+    `${BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-investor?${params}`,
+    { headers, cache: 'no-store' }
+  );
+  if (!res.ok) throw new Error(`Stock investor failed: ${res.status}`);
+  const data = await res.json();
+  const items = data.output || [];
+  if (items.length === 0) return null;
+
+  // 첫 번째 항목 = 당일 데이터
+  const today_data = items[0];
+  return {
+    date: today_data.stck_bsop_date,
+    frgn: Number(today_data.frgn_ntby_qty || 0),        // 외국인 순매수 수량
+    inst: Number(today_data.orgn_ntby_qty || 0),         // 기관 순매수 수량
+    prsn: Number(today_data.prsn_ntby_qty || 0),         // 개인 순매수 수량
+    frgnValue: Number(today_data.frgn_ntby_tr_pbmn || 0), // 외국인 순매수 금액
+    instValue: Number(today_data.orgn_ntby_tr_pbmn || 0), // 기관 순매수 금액
+    prsnValue: Number(today_data.prsn_ntby_tr_pbmn || 0), // 개인 순매수 금액
+  };
+}
+
+/** 신고가/신저가 근접 종목 (FHPST01760000) */
+export async function getNearHighLow(type: 'high' | 'low' = 'high', marketCode: string = 'J') {
+  const headers = await makeHeaders('FHPST01760000');
+  const params = new URLSearchParams({
+    FID_COND_MRKT_DIV_CODE: marketCode,
+    FID_COND_SCR_DIV_CODE: '21301',
+    FID_INPUT_ISCD: '0000',
+    FID_RANK_SORT_CLS_CODE: type === 'high' ? '0' : '1',
+    FID_INPUT_CNT_1: '0',
+    FID_PRC_CLS_CODE: '0',
+    FID_INPUT_PRICE_1: '0',
+    FID_INPUT_PRICE_2: '0',
+    FID_VOL_CNT: '0',
+    FID_TRGT_CLS_CODE: '0',
+    FID_TRGT_EXLS_CLS_CODE: '0',
+    FID_DIV_CLS_CODE: '0',
+    FID_RSFL_RATE1: '',
+    FID_RSFL_RATE2: '',
+  });
+
+  const res = await fetch(
+    `${BASE_URL}/uapi/domestic-stock/v1/ranking/near-new-highlow?${params}`,
+    { headers, cache: 'no-store' }
+  );
+  if (!res.ok) throw new Error(`Near high/low failed: ${res.status}`);
+  const data = await res.json();
+  return (data.output || []).slice(0, 20).map((item: Record<string, string>) => ({
+    rank: Number(item.data_rank),
+    code: item.stck_shrn_iscd || item.mksc_shrn_iscd,
+    name: item.hts_kor_isnm,
+    price: Number(item.stck_prpr),
+    change: Number(item.prdy_vrss),
+    changeRate: Number(item.prdy_ctrt),
+    volume: Number(item.acml_vol),
+    highPrice52w: Number(item.stck_dryy_hgpr || 0),
+    lowPrice52w: Number(item.stck_dryy_lwpr || 0),
+  }));
+}
+
 /** 한투 API 설정 여부 확인 */
 export function isKISConfigured(): boolean {
   return !!(APP_KEY && APP_SECRET);
