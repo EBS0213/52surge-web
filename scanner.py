@@ -112,6 +112,13 @@ def scan_single_stock(args):
         else:
             volume_change = 0
 
+        # 터틀 시스템 돌파 체크 (오늘 제외)
+        prev_df = df.iloc[:-1]  # 오늘 제외한 이전 데이터
+        high_20d = float(prev_df['High'].iloc[-20:].max()) if len(prev_df) >= 20 else 0
+        high_55d = float(prev_df['High'].iloc[-55:].max()) if len(prev_df) >= 55 else 0
+        breakout_20d = today_close > high_20d if high_20d > 0 else False
+        breakout_55d = today_close > high_55d if high_55d > 0 else False
+
         return {
             'code': ticker,
             'name': name,
@@ -121,7 +128,11 @@ def scan_single_stock(args):
             'volume_change_pct': float(volume_change),
             'trading_value': float(today_trading_value),
             'rsi': float(rsi),
-            'date': df.index[-1].strftime('%Y-%m-%d')
+            'date': df.index[-1].strftime('%Y-%m-%d'),
+            'high_20d': high_20d,
+            'high_55d': high_55d,
+            'breakout_20d': breakout_20d,
+            'breakout_55d': breakout_55d,
         }
     except:
         return None

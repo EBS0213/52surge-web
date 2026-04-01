@@ -15,8 +15,6 @@ import {
   countTradingDays,
   getHighN,
   getLowN,
-  isSystem1Entry,
-  isSystem2Entry,
   DEFAULT_TURTLE_SETTINGS,
 } from '../../lib/turtle';
 import type {
@@ -111,16 +109,27 @@ async function getCachedChart(code: string, days: number = 90): Promise<ChartCan
   }
 }
 
-/** 백엔드에서 스캔 종목 가져오기 */
-async function getScanStocks(): Promise<Array<{ code: string; name: string; close: number }>> {
+/** 스캔 종목 타입 (터틀 돌파 플래그 포함) */
+interface ScanStock {
+  code: string;
+  name: string;
+  close: number;
+  breakout_20d?: boolean;
+  breakout_55d?: boolean;
+  high_20d?: number;
+  high_55d?: number;
+}
+
+/** 백엔드에서 스캔 종목 가져오기 (전체) */
+async function getScanStocks(): Promise<ScanStock[]> {
   if (scanCache && Date.now() - scanCache.fetchedAt < SCAN_CACHE_TTL) {
     return scanCache.data.stocks;
   }
 
   const backendUrl = process.env.BACKEND_API_URL || 'http://3.37.194.236:8000';
   try {
-    const res = await fetch(`${backendUrl}/api/stocks/scan?max_results=50`, {
-      signal: AbortSignal.timeout(10_000),
+    const res = await fetch(`${backendUrl}/api/stocks/scan?max_results=2000`, {
+      signal: AbortSignal.timeout(15_000),
     });
     if (!res.ok) throw new Error(`Scan failed: ${res.status}`);
     const data = await res.json();
@@ -208,57 +217,50 @@ export async function GET() {
     savedArchive = cleanExpiredArchive(savedArchive);
     const archivedCodes = new Set(savedArchive.map((a) => a.code));
 
-    // 스캔 종목 중 아직 편입되지 않은 종목에 대해 시그널 확인 (병렬 배치)
+    // 스캔 종목 중 아직 편입되지 않은 종목에 대해 돌파 플래그로 시그널 확인
+    // (스캐너가 이미 2000개 전체에 대해 20일/55일 돌파를 계산해놓음 → KIS API 불필요)
     const newStocks = scanStocks.filter((s) => !existingCodes.has(s.code));
-    const BATCH = 5;
-    for (let i = 0; i < newStocks.length; i += BATCH) {
-      const batch = newStocks.slice(i, i + BATCH);
-      await Promise.all(
-        batch.map(async (stock) => {
-          try {
-            const candles = await getCachedChart(stock.code, 90);
-            if (candles.length < 20) return;
 
-            if (isSystem1Entry(stock.close, candles)) {
-              savedEntries.push({
-                code: stock.code,
-                name: stock.name,
-                system: 'system1',
-                entryDate: today(),
-                entryPrice: stock.close,
-              });
-              existingCodes.add(stock.code);
-              if (archivedCodes.has(stock.code)) {
-                savedArchive = savedArchive.filter((a) => a.code !== stock.code);
-                archivedCodes.delete(stock.code);
-              }
-              return;
-            }
+    for (const stock of newStocks) {
+      // 시스템1: 20일 돌파
+      if (stock.breakout_20d) {
+        savedEntries.push({
+          code: stock.code,
+          name: stock.name,
+          system: 'system1',
+          entryDate: today(),
+          entryPrice: stock.close,
+        });
+        existingCodes.add(stock.code);
+        if (archivedCodes.has(stock.code)) {
+          savedArchive = savedArchive.filter((a) => a.code !== stock.code);
+          archivedCodes.delete(stock.code);
+        }
+        continue;
+      }
 
-            if (candles.length >= 55 && isSystem2Entry(stock.close, candles)) {
-              savedEntries.push({
-                code: stock.code,
-                name: stock.name,
-                system: 'system2',
-                entryDate: today(),
-                entryPrice: stock.close,
-              });
-              existingCodes.add(stock.code);
-              if (archivedCodes.has(stock.code)) {
-                savedArchive = savedArchive.filter((a) => a.code !== stock.code);
-                archivedCodes.delete(stock.code);
-              }
-            }
-          } catch { /* skip */ }
-        })
-      );
-      if (i + BATCH < newStocks.length) await new Promise((r) => setTimeout(r, 80));
+      // 시스템2: 55일 돌파
+      if (stock.breakout_55d) {
+        savedEntries.push({
+          code: stock.code,
+          name: stock.name,
+          system: 'system2',
+          entryDate: today(),
+          entryPrice: stock.close,
+        });
+        existingCodes.add(stock.code);
+        if (archivedCodes.has(stock.code)) {
+          savedArchive = savedArchive.filter((a) => a.code !== stock.code);
+          archivedCodes.delete(stock.code);
+        }
+      }
     }
 
     // 스캔 후 변경사항 저장
     saveState(savedSettings, savedEntries);
 
     // 2. 각 편입 종목 상세 정보 계산 (병렬 배치)
+    const BATCH = 5;
     const enrichedStocks: WatchlistStock[] = [];
 
     for (let i = 0; i < savedEntries.length; i += BATCH) {
