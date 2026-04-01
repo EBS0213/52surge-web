@@ -117,7 +117,7 @@ async function getScanStocks(): Promise<Array<{ code: string; name: string; clos
     return scanCache.data.stocks;
   }
 
-  const backendUrl = process.env.BACKEND_API_URL || 'http://13.124.156.73:8000';
+  const backendUrl = process.env.BACKEND_API_URL || 'http://3.37.194.236:8000';
   try {
     const res = await fetch(`${backendUrl}/api/stocks/scan?max_results=50`, {
       signal: AbortSignal.timeout(10_000),

@@ -7,7 +7,7 @@
 set -e
 
 PROJECT_DIR="$HOME/Desktop/터미널/52surge program"
-EC2_HOST="ubuntu@13.124.156.73"
+EC2_HOST="ubuntu@3.37.194.236"
 EC2_KEY="$HOME/Desktop/터미널/52surge program/52surge-key.pem"
 EC2_WEB="/home/ubuntu/unimind-web"
 EC2_BACKEND="/home/ubuntu/52surge-backend"

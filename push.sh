@@ -6,7 +6,7 @@
 
 set -e
 
-EC2_HOST="ubuntu@13.124.156.73"
+EC2_HOST="ubuntu@3.37.194.236"
 EC2_KEY="$(cd "$(dirname "$0")" && pwd)/52surge-key.pem"
 EC2_PROJECT="/home/ubuntu/unimind-web"
 

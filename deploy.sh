@@ -55,7 +55,7 @@ if [ ! -f .env.local ]; then
   echo "  nano $APP_DIR/.env.local"
   echo ""
   echo "  내용:"
-  echo "  BACKEND_API_URL=http://13.124.156.73:8000"
+  echo "  BACKEND_API_URL=http://3.37.194.236:8000"
   echo "  KIS_APP_KEY=your_key"
   echo "  KIS_APP_SECRET=your_secret"
   echo "  KIS_BASE_URL=https://openapi.koreainvestment.com:9443"
