@@ -197,6 +197,11 @@ function CandleChart({ data, height, overlays = new Set() }: { data: CandleData[
     if (d.low < allMin) allMin = d.low;
     if (d.high > allMax) allMax = d.high;
   }
+  // BB 밴드가 Y축 범위에 포함되도록 확장
+  if (bb) {
+    for (const v of bb.upper) { if (v !== null && v > allMax) allMax = v; }
+    for (const v of bb.lower) { if (v !== null && v < allMin) allMin = v; }
+  }
   const range = allMax - allMin || 1;
 
   const candleW = Math.max(1, (chartW / data.length) * 0.6);
