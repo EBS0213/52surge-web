@@ -216,8 +216,13 @@ export async function GET() {
     const newStocks = scanStocks.filter((s) => !existingCodes.has(s.code));
 
     for (const stock of newStocks) {
+      // 이미 편입된 종목의 시스템 목록 (같은 종목이 system1, system2 둘 다 들어갈 수 있음)
+      const existingSystems = new Set(
+        savedEntries.filter((e) => e.code === stock.code).map((e) => e.system)
+      );
+
       // 시스템1: 20일 돌파
-      if (stock.breakout_20d) {
+      if (stock.breakout_20d && !existingSystems.has('system1')) {
         savedEntries.push({
           code: stock.code,
           name: stock.name,
@@ -225,16 +230,14 @@ export async function GET() {
           entryDate: today(),
           entryPrice: stock.close,
         });
-        existingCodes.add(stock.code);
         if (archivedCodes.has(stock.code)) {
           savedArchive = savedArchive.filter((a) => a.code !== stock.code);
           archivedCodes.delete(stock.code);
         }
-        continue;
       }
 
-      // 시스템2: 55일 돌파
-      if (stock.breakout_55d) {
+      // 시스템2: 55일 돌파 (20일 돌파와 독립적으로 체크 — 둘 다 해당되면 둘 다 편입)
+      if (stock.breakout_55d && !existingSystems.has('system2')) {
         savedEntries.push({
           code: stock.code,
           name: stock.name,
@@ -242,12 +245,13 @@ export async function GET() {
           entryDate: today(),
           entryPrice: stock.close,
         });
-        existingCodes.add(stock.code);
         if (archivedCodes.has(stock.code)) {
           savedArchive = savedArchive.filter((a) => a.code !== stock.code);
           archivedCodes.delete(stock.code);
         }
       }
+
+      existingCodes.add(stock.code);
     }
 
     // 스캔 후 변경사항 저장

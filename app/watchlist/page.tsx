@@ -214,10 +214,12 @@ function StockRow({
   stock,
   isSelected,
   onToggle,
+  dualSystem,
 }: {
   stock: WatchlistStock;
   isSelected: boolean;
   onToggle: (code: string) => void;
+  dualSystem: boolean;
 }) {
   const pnlColor = stock.pnlPct > 0 ? 'text-red-600' : stock.pnlPct < 0 ? 'text-blue-600' : 'text-gray-600';
 
@@ -255,13 +257,20 @@ function StockRow({
 
       {/* 시스템 */}
       <td className="py-3 px-3">
-        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-          stock.system === 'system1'
-            ? 'bg-green-50 text-green-700'
-            : 'bg-purple-50 text-purple-700'
-        }`}>
-          {systemLabel(stock.system)}
-        </span>
+        <div className="flex items-center gap-1">
+          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+            stock.system === 'system1'
+              ? 'bg-green-50 text-green-700'
+              : 'bg-purple-50 text-purple-700'
+          }`}>
+            {systemLabel(stock.system)}
+          </span>
+          {dualSystem && (
+            <span className="text-xs px-1.5 py-0.5 rounded-full font-medium bg-orange-50 text-orange-600 border border-orange-200">
+              S1+S2
+            </span>
+          )}
+        </div>
       </td>
 
       {/* 편입일 */}
@@ -407,14 +416,20 @@ function WatchlistTable({
                 </td>
               </tr>
             ) : (
-              filtered.map((stock) => (
+              filtered.map((stock) => {
+                const dualSystem = stocks.some(
+                  (s) => s.code === stock.code && s.system !== stock.system
+                );
+                return (
                 <StockRow
-                  key={stock.code}
+                  key={`${stock.code}-${stock.system}`}
                   stock={stock}
                   isSelected={selectedCodes.has(stock.code)}
                   onToggle={onToggle}
+                  dualSystem={dualSystem}
                 />
-              ))
+                );
+              })
             )}
           </tbody>
         </table>
