@@ -177,7 +177,7 @@ export async function getVolumeRank(marketCode: string = 'J') {
   const data = await res.json();
   const items = extractItems(data);
   console.log(`[KIS] Volume rank: ${items.length} items`);
-  return items.slice(0, 20).map(parseRankItem);
+  return items.slice(0, 30).map(parseRankItem);
 }
 
 /** 등락률 순위 (FHPST01700000) */
@@ -212,7 +212,7 @@ export async function getFluctuationRank(direction: 'up' | 'down' = 'up', market
   const data = await res.json();
   const items = extractItems(data);
   console.log(`[KIS] Fluctuation rank (${direction}): ${items.length} items`);
-  return items.slice(0, 20).map(parseRankItem);
+  return items.slice(0, 30).map(parseRankItem);
 }
 
 /** 종목별 투자자 매매동향 (FHKST01010900) */
@@ -281,7 +281,7 @@ export async function getNearHighLow(type: 'high' | 'low' = 'high', marketCode: 
   const data = await res.json();
   const items = extractItems(data);
   console.log(`[KIS] Near highlow (${type}): ${items.length} items`);
-  return items.slice(0, 20).map(parseRankItem);
+  return items.slice(0, 30).map(parseRankItem);
 }
 
 /** 한투 API 설정 여부 확인 */

@@ -178,7 +178,7 @@ function useChartSize(containerRef: React.RefObject<HTMLDivElement | null>) {
 /** SVG 캔들차트 + 이동평균선 + 볼린저밴드 */
 const DISPLAY_CANDLES = 60; // 차트에 보여줄 캔들 수
 
-function CandleChart({ data, height, overlays = new Set() }: { data: CandleData[]; height: number; overlays?: Set<OverlayKey> }) {
+function CandleChart({ data, height, overlays = new Set(), yAxisMin }: { data: CandleData[]; height: number; overlays?: Set<OverlayKey>; yAxisMin?: number }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const width = useChartSize(containerRef);
 
@@ -217,6 +217,8 @@ function CandleChart({ data, height, overlays = new Set() }: { data: CandleData[
     for (const v of bb.upper) { if (v !== null && v > allMax) allMax = v; }
     for (const v of bb.lower) { if (v !== null && v < allMin) allMin = v; }
   }
+  // Y축 최소값 강제 설정 (KOSPI 4000, KOSDAQ 890 등)
+  if (yAxisMin !== undefined) allMin = Math.min(allMin, yAxisMin);
   const range = allMax - allMin || 1;
 
   const candleW = Math.max(1, (chartW / displayData.length) * 0.6);
@@ -361,6 +363,12 @@ function formatInvestor(v: number): string {
   return `${sign}${v.toLocaleString()}`;
 }
 
+/** Y축 최소값: 지수별 기준선 */
+const Y_AXIS_MIN: Record<string, number> = {
+  '0001': 4000,  // KOSPI
+  '1001': 890,   // KOSDAQ
+};
+
 /** 단일 지수 카드 */
 const defaultPeriod: PeriodKey = 'daily';
 
@@ -440,7 +448,7 @@ function IndexCard({ data, investor }: { data: IndexData; investor?: InvestorDat
 
       {/* 차트 */}
       <div className="px-2">
-        <CandleChart data={displayChart} height={220} overlays={activeOverlays} />
+        <CandleChart data={displayChart} height={220} overlays={activeOverlays} yAxisMin={Y_AXIS_MIN[data.code]} />
       </div>
 
       {/* 기간 선택 + 수급 */}
@@ -531,7 +539,7 @@ function IndexCard({ data, investor }: { data: IndexData; investor?: InvestorDat
   );
 }
 
-export default function MarketIndex() {
+export default function MarketIndex({ aside }: { aside?: React.ReactNode } = {}) {
   const [data, setData] = useState<MarketData | null>(null);
   const [error, setError] = useState(false);
   const isMounted = useRef(true);
@@ -572,7 +580,7 @@ export default function MarketIndex() {
   if (!data && !error) {
     return (
       <section className="pt-4 pb-2 px-6">
-        <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className={`max-w-7xl mx-auto grid gap-4 ${aside ? 'grid-cols-1 md:grid-cols-[1fr_1fr_160px]' : 'grid-cols-1 md:grid-cols-2'}`}>
           {[0, 1].map((i) => (
             <div key={i} className="bg-white rounded-2xl p-6 border border-gray-100 animate-pulse">
               <div className="h-4 w-20 bg-gray-200 rounded mb-2" />
@@ -580,6 +588,7 @@ export default function MarketIndex() {
               <div className="h-40 bg-gray-100 rounded" />
             </div>
           ))}
+          {aside}
         </div>
       </section>
     );
@@ -588,12 +597,13 @@ export default function MarketIndex() {
   if (error || !data) {
     return (
       <section className="pt-4 pb-2 px-6">
-        <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className={`max-w-7xl mx-auto grid gap-4 ${aside ? 'grid-cols-1 md:grid-cols-[1fr_1fr_160px]' : 'grid-cols-1 md:grid-cols-2'}`}>
           {[0, 1].map((i) => (
             <div key={i} className="bg-white rounded-2xl p-6 border border-gray-100 text-center">
               <p className="text-sm text-gray-400">지수 데이터를 불러오지 못했습니다</p>
             </div>
           ))}
+          {aside}
         </div>
       </section>
     );
@@ -601,9 +611,10 @@ export default function MarketIndex() {
 
   return (
     <section className="pt-4 pb-2 px-6">
-      <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className={`max-w-7xl mx-auto grid gap-4 ${aside ? 'grid-cols-1 md:grid-cols-[1fr_1fr_160px]' : 'grid-cols-1 md:grid-cols-2'}`}>
         <IndexCard data={data.kospi} investor={data.kospi.investor} />
         <IndexCard data={data.kosdaq} investor={data.kosdaq.investor} />
+        {aside}
       </div>
     </section>
   );

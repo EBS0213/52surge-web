@@ -29,11 +29,11 @@ export default function Home() {
     <div className="min-h-screen bg-[#f5f5f7] pt-12">
       <Navbar lastUpdated={lastUpdated} onRefresh={refresh} />
 
-      {/* KOSPI / KOSDAQ 지수 */}
-      <MarketIndex />
+      {/* KOSPI / KOSDAQ 지수 + 시장 지표 (세로 사이드바) */}
+      <MarketIndex aside={data ? <MarketOverview data={data} /> : undefined} />
 
       {error && (
-        <div className="max-w-[980px] mx-auto px-6 mt-4">
+        <div className="max-w-7xl mx-auto px-6 mt-4">
           <div className="text-sm text-red-500 bg-red-50 px-4 py-2 rounded-lg inline-block">
             {error} — 자동 재시도 중
           </div>
@@ -45,7 +45,7 @@ export default function Home() {
         <>
           <SkeletonMarketOverview />
           <section className="py-8 px-6">
-            <div className="max-w-[980px] mx-auto">
+            <div className="max-w-7xl mx-auto">
               <div className="h-8 w-48 bg-gray-200 rounded mb-8 animate-pulse" />
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {[...Array(8)].map((_, i) => (
@@ -59,22 +59,21 @@ export default function Home() {
 
       {/* 데이터 표시 */}
       {data && (
-        <>
-          <MarketOverview data={data} />
-          <StockGrid
-            data={data}
-            realtimePrices={realtimePrices}
-            isRealtimeAvailable={isRealtimeAvailable}
-            onStockClick={(s) => setSelectedStock({ code: s.code, name: s.name })}
-          />
-        </>
+        <StockGrid
+          data={data}
+          realtimePrices={realtimePrices}
+          isRealtimeAvailable={isRealtimeAvailable}
+          onStockClick={(s) => setSelectedStock({ code: s.code, name: s.name })}
+        />
       )}
 
-      {/* 시장 순위 (거래량/등락률/신고가) */}
-      <RankingSection onStockClick={setSelectedStock} />
-
-      {/* 경제 뉴스 */}
-      <NewsSection />
+      {/* 시장 순위 + 경제 뉴스: 좌우 1:1 배치 */}
+      <section className="py-6 px-6">
+        <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <RankingSection onStockClick={setSelectedStock} />
+          <NewsSection />
+        </div>
+      </section>
 
       {/* 차트 모달 */}
       {selectedStock && (
@@ -87,7 +86,7 @@ export default function Home() {
 
       {/* Footer */}
       <footer className="py-4 px-6 bg-[#f5f5f7]">
-        <div className="max-w-[980px] mx-auto flex items-center justify-between border-t border-gray-200 pt-4">
+        <div className="max-w-7xl mx-auto flex items-center justify-between border-t border-gray-200 pt-4">
           <p className="text-xs text-[#86868b]">
             © 2026 OURTLE. J.Kim of Unimind
           </p>

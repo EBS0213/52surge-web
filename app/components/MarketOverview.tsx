@@ -20,39 +20,32 @@ function getRSILabel(rsi: number | null): string {
   return '중립';
 }
 
+/** 컴팩트 세로 레이아웃 (지수 카드 옆에 배치용) */
 export default function MarketOverview({ data }: MarketOverviewProps) {
   return (
-    <section className="pt-4 pb-2 px-6">
-      <div className="max-w-7xl mx-auto">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-gray-50 rounded-2xl p-6 ">
-            <div className="text-xs text-gray-500 mb-1">거래일</div>
-            <div className="text-2xl font-semibold">{data.trading_date}</div>
-          </div>
-          <div className="bg-gray-50 rounded-2xl p-6 ">
-            <div className="text-xs text-gray-500 mb-1">코스피 RSI</div>
-            <div className={`text-2xl font-semibold ${getRSIColor(data.market_rsi.kospi)}`}>
-              {data.market_rsi.kospi?.toFixed(1) || 'N/A'}
-            </div>
-            <div className="text-xs text-gray-400 mt-1">
-              {getRSILabel(data.market_rsi.kospi)}
-            </div>
-          </div>
-          <div className="bg-gray-50 rounded-2xl p-6 ">
-            <div className="text-xs text-gray-500 mb-1">코스닥 RSI</div>
-            <div className={`text-2xl font-semibold ${getRSIColor(data.market_rsi.kosdaq)}`}>
-              {data.market_rsi.kosdaq?.toFixed(1) || 'N/A'}
-            </div>
-            <div className="text-xs text-gray-400 mt-1">
-              {getRSILabel(data.market_rsi.kosdaq)}
-            </div>
-          </div>
-          <div className="bg-gray-50 rounded-2xl p-6 ">
-            <div className="text-xs text-gray-500 mb-1">신고가 종목 수</div>
-            <div className="text-2xl font-semibold text-red-500">{data.total_found}개</div>
-          </div>
-        </div>
+    <div className="flex flex-col gap-2 min-w-0">
+      <div className="bg-white rounded-xl p-3 border border-gray-100">
+        <div className="text-[10px] text-gray-400 mb-0.5">거래일</div>
+        <div className="text-sm font-semibold text-gray-900">{data.trading_date}</div>
       </div>
-    </section>
+      <div className="bg-white rounded-xl p-3 border border-gray-100">
+        <div className="text-[10px] text-gray-400 mb-0.5">코스피 RSI</div>
+        <div className={`text-sm font-semibold ${getRSIColor(data.market_rsi.kospi)}`}>
+          {data.market_rsi.kospi?.toFixed(1) || 'N/A'}
+        </div>
+        <div className="text-[10px] text-gray-400">{getRSILabel(data.market_rsi.kospi)}</div>
+      </div>
+      <div className="bg-white rounded-xl p-3 border border-gray-100">
+        <div className="text-[10px] text-gray-400 mb-0.5">코스닥 RSI</div>
+        <div className={`text-sm font-semibold ${getRSIColor(data.market_rsi.kosdaq)}`}>
+          {data.market_rsi.kosdaq?.toFixed(1) || 'N/A'}
+        </div>
+        <div className="text-[10px] text-gray-400">{getRSILabel(data.market_rsi.kosdaq)}</div>
+      </div>
+      <div className="bg-white rounded-xl p-3 border border-gray-100">
+        <div className="text-[10px] text-gray-400 mb-0.5">신고가 종목</div>
+        <div className="text-sm font-semibold text-red-500">{data.total_found}개</div>
+      </div>
+    </div>
   );
 }

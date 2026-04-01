@@ -79,53 +79,52 @@ export default function RankingSection({ onStockClick }: { onStockClick?: (stock
   };
 
   return (
-    <section className="py-6 px-6">
-      <div className="max-w-[980px] mx-auto">
-        <h2 className="text-xl font-bold text-gray-900 mb-4">시장 순위</h2>
+    <div>
+      <h2 className="text-lg font-bold text-gray-900 mb-3">시장 순위</h2>
 
-        {/* Tabs */}
-        <div className="flex gap-2 mb-4 overflow-x-auto">
-          {TABS.map(({ key, label }) => (
-            <button
-              key={key}
-              onClick={() => setTab(key)}
-              className={`px-4 py-1.5 text-sm font-medium rounded-full whitespace-nowrap transition-colors ${
-                tab === key
-                  ? 'bg-gray-900 text-white'
-                  : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+      {/* Tabs */}
+      <div className="flex gap-1.5 mb-3 overflow-x-auto">
+        {TABS.map(({ key, label }) => (
+          <button
+            key={key}
+            onClick={() => setTab(key)}
+            className={`px-3 py-1 text-xs font-medium rounded-full whitespace-nowrap transition-colors ${
+              tab === key
+                ? 'bg-gray-900 text-white'
+                : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
 
-        {/* Table */}
-        {loading && (
-          <div className="bg-white rounded-2xl border border-gray-100 p-8">
-            <div className="space-y-3">
-              {[...Array(5)].map((_, i) => (
-                <div key={i} className="h-10 bg-gray-100 rounded animate-pulse" />
-              ))}
-            </div>
+      {/* Table */}
+      {loading && (
+        <div className="bg-white rounded-2xl border border-gray-100 p-6">
+          <div className="space-y-2">
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="h-8 bg-gray-100 rounded animate-pulse" />
+            ))}
           </div>
-        )}
+        </div>
+      )}
 
-        {!loading && data && data.items.length > 0 && (
-          <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-100 text-xs text-gray-400">
-                  <th className="text-left py-3 px-4 font-medium w-8">#</th>
-                  <th className="text-left py-3 px-2 font-medium">종목</th>
-                  <th className="text-right py-3 px-2 font-medium">현재가</th>
-                  <th className="text-right py-3 px-2 font-medium">등락률</th>
-                  <th className="text-right py-3 px-4 font-medium hidden sm:table-cell">거래량</th>
-                  <th className="text-right py-3 px-4 font-medium hidden md:table-cell">거래대금</th>
+      {!loading && data && data.items.length > 0 && (
+        <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+          <div className="max-h-[480px] overflow-y-auto">
+            <table className="w-full text-xs">
+              <thead className="sticky top-0 bg-white z-10">
+                <tr className="border-b border-gray-100 text-[10px] text-gray-400">
+                  <th className="text-left py-2 px-3 font-medium w-6">#</th>
+                  <th className="text-left py-2 px-2 font-medium">종목</th>
+                  <th className="text-right py-2 px-2 font-medium">현재가</th>
+                  <th className="text-right py-2 px-2 font-medium">등락률</th>
+                  <th className="text-right py-2 px-3 font-medium hidden sm:table-cell">거래량</th>
                 </tr>
               </thead>
               <tbody>
-                {data.items.slice(0, 15).map((item, idx) => {
+                {data.items.map((item, idx) => {
                   const isUp = item.change >= 0;
                   const color = item.change === 0 ? 'text-gray-600' : isUp ? 'text-red-500' : 'text-blue-500';
                   return (
@@ -134,20 +133,16 @@ export default function RankingSection({ onStockClick }: { onStockClick?: (stock
                       className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer transition-colors"
                       onClick={() => onStockClick?.({ code: item.code, name: item.name })}
                     >
-                      <td className="py-2.5 px-4 text-gray-400 text-xs">{idx + 1}</td>
-                      <td className="py-2.5 px-2">
-                        <div className="font-medium text-gray-900 text-sm">{item.name}</div>
-                        <div className="text-xs text-gray-400">{item.code}</div>
+                      <td className="py-1.5 px-3 text-gray-400 text-[10px]">{idx + 1}</td>
+                      <td className="py-1.5 px-2">
+                        <div className="font-medium text-gray-900 text-xs truncate max-w-[120px]">{item.name}</div>
                       </td>
-                      <td className="py-2.5 px-2 text-right font-medium">{item.price.toLocaleString()}</td>
-                      <td className={`py-2.5 px-2 text-right font-medium ${color}`}>
+                      <td className="py-1.5 px-2 text-right font-medium">{item.price.toLocaleString()}</td>
+                      <td className={`py-1.5 px-2 text-right font-medium ${color}`}>
                         {isUp ? '+' : ''}{item.changeRate.toFixed(2)}%
                       </td>
-                      <td className="py-2.5 px-4 text-right text-gray-500 hidden sm:table-cell">
+                      <td className="py-1.5 px-3 text-right text-gray-500 hidden sm:table-cell">
                         {formatVolume(item.volume)}
-                      </td>
-                      <td className="py-2.5 px-4 text-right text-gray-500 hidden md:table-cell">
-                        {formatValue(item.tradingValue)}
                       </td>
                     </tr>
                   );
@@ -155,14 +150,14 @@ export default function RankingSection({ onStockClick }: { onStockClick?: (stock
               </tbody>
             </table>
           </div>
-        )}
+        </div>
+      )}
 
-        {!loading && (!data || data.items.length === 0) && (
-          <div className="bg-white rounded-2xl border border-gray-100 p-8 text-center text-gray-400">
-            데이터를 불러올 수 없습니다
-          </div>
-        )}
-      </div>
-    </section>
+      {!loading && (!data || data.items.length === 0) && (
+        <div className="bg-white rounded-2xl border border-gray-100 p-6 text-center text-gray-400 text-sm">
+          데이터를 불러올 수 없습니다
+        </div>
+      )}
+    </div>
   );
 }

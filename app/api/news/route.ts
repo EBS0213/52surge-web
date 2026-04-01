@@ -382,7 +382,10 @@ export async function GET(request: Request) {
           hasSerpKey ? fetchNaverNews() : Promise.resolve([]),
           fetchKcifReports(),
         ]);
-        const combined = dedup(sortByDate([...rss, ...naver, ...kcif])).slice(0, 25);
+        // RSS + 네이버 dedup 후 KCIF는 별도로 보장 (dedup에서 빠지지 않도록)
+        const mainNews = dedup(sortByDate([...rss, ...naver])).slice(0, 20);
+        const kcifSlot = kcif.slice(0, 5);
+        const combined = sortByDate([...mainNews, ...kcifSlot]).slice(0, 30);
         return NextResponse.json({ items: combined, tab: 'korea' });
       }
       case 'worldwide': {
@@ -401,7 +404,9 @@ export async function GET(request: Request) {
           hasSerpKey ? fetchNaverNews() : Promise.resolve([]),
           fetchKcifReports(),
         ]);
-        const korea = dedup(sortByDate([...rss, ...naver, ...kcif])).slice(0, 25);
+        const mainNews = dedup(sortByDate([...rss, ...naver])).slice(0, 20);
+        const kcifSlot = kcif.slice(0, 5);
+        const korea = sortByDate([...mainNews, ...kcifSlot]).slice(0, 30);
         return NextResponse.json({
           items: korea,
           hasSerpKey,

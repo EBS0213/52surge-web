@@ -11,7 +11,7 @@ interface NewsItem {
   translated?: boolean;
 }
 
-const ITEMS_PER_PAGE = 9; // 3x3
+const ITEMS_PER_PAGE = 15; // 세로 리스트
 
 /** 매체 필터 옵션 */
 const SOURCE_FILTERS: { key: string; label: string; match: (s: string) => boolean }[] = [
@@ -269,33 +269,28 @@ export default function NewsSection() {
   // 로딩 스켈레톤
   if (loading) {
     return (
-      <section className="pt-6 pb-4 px-6">
-        <div className="max-w-[980px] mx-auto">
-          <div className="h-8 w-32 bg-gray-200 rounded mb-6 animate-pulse" />
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {[...Array(9)].map((_, i) => (
-              <div key={i} className="bg-white rounded-2xl p-5 border border-gray-100 animate-pulse">
-                <div className="h-3 w-16 bg-gray-200 rounded mb-3" />
-                <div className="h-5 w-full bg-gray-200 rounded mb-2" />
-                <div className="h-5 w-3/4 bg-gray-200 rounded mb-4" />
-                <div className="h-3 w-full bg-gray-100 rounded mb-1" />
-                <div className="h-3 w-2/3 bg-gray-100 rounded" />
-              </div>
-            ))}
-          </div>
+      <div>
+        <div className="h-6 w-24 bg-gray-200 rounded mb-4 animate-pulse" />
+        <div className="space-y-3">
+          {[...Array(6)].map((_, i) => (
+            <div key={i} className="bg-white rounded-xl p-4 border border-gray-100 animate-pulse">
+              <div className="h-3 w-16 bg-gray-200 rounded mb-2" />
+              <div className="h-4 w-full bg-gray-200 rounded mb-1" />
+              <div className="h-3 w-2/3 bg-gray-100 rounded" />
+            </div>
+          ))}
         </div>
-      </section>
+      </div>
     );
   }
 
   if (allNews.length === 0) return null;
 
   return (
-    <section className="pt-6 pb-4 px-6">
-      <div className="max-w-[980px] mx-auto">
-        {/* 헤더 + 매체 필터 */}
-        <div className="mb-6">
-          <h2 className="text-2xl font-bold text-[#1d1d1f]">경제 뉴스</h2>
+    <div>
+      {/* 헤더 + 매체 필터 */}
+      <div className="mb-4">
+        <h2 className="text-lg font-bold text-[#1d1d1f]">경제 뉴스</h2>
           <div className="flex items-center gap-1.5 mt-3 flex-wrap">
             {availableSources.map(({ key, label }) => (
               <button
@@ -313,11 +308,12 @@ export default function NewsSection() {
           </div>
         </div>
 
-        {/* 뉴스 카드 그리드 (3x3) */}
-        {currentItems.length > 0 ? (
+      {/* 뉴스 카드 리스트 */}
+      {currentItems.length > 0 ? (
+        <div className="max-h-[480px] overflow-y-auto">
           <div
             ref={gridRef}
-            className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 transition-all duration-200 ${
+            className={`space-y-3 transition-all duration-200 ${
               slideDir === 'left' ? 'opacity-0 translate-x-8' :
               slideDir === 'right' ? 'opacity-0 -translate-x-8' :
               'opacity-100 translate-x-0'
@@ -327,15 +323,16 @@ export default function NewsSection() {
               <NewsCard key={`${sourceFilter}-${page}-${item.title}-${i}`} item={item} index={i} />
             ))}
           </div>
-        ) : (
-          <div className="text-center py-12 text-[#86868b]">
-            <p className="text-sm">
-              {sourceFilter !== 'all'
-                ? `${SOURCE_FILTERS.find(f => f.key === sourceFilter)?.label || ''} 뉴스가 없습니다.`
-                : '뉴스를 불러올 수 없습니다.'}
-            </p>
-          </div>
-        )}
+        </div>
+      ) : (
+        <div className="text-center py-8 text-[#86868b]">
+          <p className="text-sm">
+            {sourceFilter !== 'all'
+              ? `${SOURCE_FILTERS.find(f => f.key === sourceFilter)?.label || ''} 뉴스가 없습니다.`
+              : '뉴스를 불러올 수 없습니다.'}
+          </p>
+        </div>
+      )}
 
         {/* 페이지네이션 */}
         {totalPages > 1 && (
@@ -380,9 +377,8 @@ export default function NewsSection() {
             >
               ›
             </button>
-          </div>
-        )}
-      </div>
-    </section>
+        </div>
+      )}
+    </div>
   );
 }
