@@ -119,20 +119,49 @@ export async function getDailyChart(
 // 추가 API 함수들
 // ───────────────────────────────────────────────
 
+/** KIS 응답에서 배열 데이터 추출 (output, output1, output2 중 첫 배열) */
+function extractItems(data: Record<string, unknown>): Record<string, string>[] {
+  if (data.rt_cd !== '0') {
+    console.error(`[KIS] API error: rt_cd=${data.rt_cd}, msg=${data.msg1 || data.msg_cd}`);
+    return [];
+  }
+  for (const key of ['output', 'output1', 'output2']) {
+    if (Array.isArray(data[key]) && (data[key] as unknown[]).length > 0) {
+      return data[key] as Record<string, string>[];
+    }
+  }
+  console.log('[KIS] No array found in response keys:', Object.keys(data));
+  return [];
+}
+
+/** 순위 항목 파싱 (공통) */
+function parseRankItem(item: Record<string, string>) {
+  return {
+    rank: Number(item.data_rank || 0),
+    code: item.mksc_shrn_iscd || item.stck_shrn_iscd || '',
+    name: item.hts_kor_isnm || '',
+    price: Number(item.stck_prpr || 0),
+    change: Number(item.prdy_vrss || 0),
+    changeRate: Number(item.prdy_ctrt || 0),
+    volume: Number(item.acml_vol || 0),
+    tradingValue: Number(item.acml_tr_pbmn || 0),
+  };
+}
+
 /** 거래량 순위 (FHPST01710000) */
 export async function getVolumeRank(marketCode: string = 'J') {
   const headers = await makeHeaders('FHPST01710000');
   const params = new URLSearchParams({
-    FID_COND_MRKT_DIV_CODE: marketCode, // J:전체, 0:코스피, 1:코스닥
+    FID_COND_MRKT_DIV_CODE: marketCode,
     FID_COND_SCR_DIV_CODE: '20101',
     FID_INPUT_ISCD: '0000',
     FID_DIV_CLS_CODE: '0',
     FID_BLNG_CLS_CODE: '0',
     FID_TRGT_CLS_CODE: '111111111',
     FID_TRGT_EXLS_CLS_CODE: '000000',
-    FID_INPUT_PRICE_1: '0',
-    FID_INPUT_PRICE_2: '0',
-    FID_VOL_CNT: '0',
+    FID_INPUT_PRICE_1: '',
+    FID_INPUT_PRICE_2: '',
+    FID_VOL_CNT: '',
     FID_INPUT_DATE_1: '',
   });
 
@@ -140,18 +169,15 @@ export async function getVolumeRank(marketCode: string = 'J') {
     `${BASE_URL}/uapi/domestic-stock/v1/quotations/volume-rank?${params}`,
     { headers, cache: 'no-store' }
   );
-  if (!res.ok) throw new Error(`Volume rank failed: ${res.status}`);
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    console.error(`[KIS] Volume rank HTTP ${res.status}: ${body.slice(0, 200)}`);
+    throw new Error(`Volume rank failed: ${res.status}`);
+  }
   const data = await res.json();
-  return (data.output || []).slice(0, 20).map((item: Record<string, string>) => ({
-    rank: Number(item.data_rank),
-    code: item.mksc_shrn_iscd,
-    name: item.hts_kor_isnm,
-    price: Number(item.stck_prpr),
-    change: Number(item.prdy_vrss),
-    changeRate: Number(item.prdy_ctrt),
-    volume: Number(item.acml_vol),
-    tradingValue: Number(item.acml_tr_pbmn),
-  }));
+  const items = extractItems(data);
+  console.log(`[KIS] Volume rank: ${items.length} items`);
+  return items.slice(0, 20).map(parseRankItem);
 }
 
 /** 등락률 순위 (FHPST01700000) */
@@ -164,9 +190,9 @@ export async function getFluctuationRank(direction: 'up' | 'down' = 'up', market
     FID_RANK_SORT_CLS_CODE: direction === 'up' ? '0' : '1',
     FID_INPUT_CNT_1: '0',
     FID_PRC_CLS_CODE: '0',
-    FID_INPUT_PRICE_1: '0',
-    FID_INPUT_PRICE_2: '0',
-    FID_VOL_CNT: '0',
+    FID_INPUT_PRICE_1: '',
+    FID_INPUT_PRICE_2: '',
+    FID_VOL_CNT: '',
     FID_TRGT_CLS_CODE: '0',
     FID_TRGT_EXLS_CLS_CODE: '0',
     FID_DIV_CLS_CODE: '0',
@@ -178,18 +204,15 @@ export async function getFluctuationRank(direction: 'up' | 'down' = 'up', market
     `${BASE_URL}/uapi/domestic-stock/v1/ranking/fluctuation?${params}`,
     { headers, cache: 'no-store' }
   );
-  if (!res.ok) throw new Error(`Fluctuation rank failed: ${res.status}`);
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    console.error(`[KIS] Fluctuation rank HTTP ${res.status}: ${body.slice(0, 200)}`);
+    throw new Error(`Fluctuation rank failed: ${res.status}`);
+  }
   const data = await res.json();
-  return (data.output || []).slice(0, 20).map((item: Record<string, string>) => ({
-    rank: Number(item.data_rank),
-    code: item.stck_shrn_iscd || item.mksc_shrn_iscd,
-    name: item.hts_kor_isnm,
-    price: Number(item.stck_prpr),
-    change: Number(item.prdy_vrss),
-    changeRate: Number(item.prdy_ctrt),
-    volume: Number(item.acml_vol),
-    tradingValue: Number(item.acml_tr_pbmn),
-  }));
+  const items = extractItems(data);
+  console.log(`[KIS] Fluctuation rank (${direction}): ${items.length} items`);
+  return items.slice(0, 20).map(parseRankItem);
 }
 
 /** 종목별 투자자 매매동향 (FHKST01010900) */
@@ -236,9 +259,9 @@ export async function getNearHighLow(type: 'high' | 'low' = 'high', marketCode: 
     FID_RANK_SORT_CLS_CODE: type === 'high' ? '0' : '1',
     FID_INPUT_CNT_1: '0',
     FID_PRC_CLS_CODE: '0',
-    FID_INPUT_PRICE_1: '0',
-    FID_INPUT_PRICE_2: '0',
-    FID_VOL_CNT: '0',
+    FID_INPUT_PRICE_1: '',
+    FID_INPUT_PRICE_2: '',
+    FID_VOL_CNT: '',
     FID_TRGT_CLS_CODE: '0',
     FID_TRGT_EXLS_CLS_CODE: '0',
     FID_DIV_CLS_CODE: '0',
@@ -250,19 +273,15 @@ export async function getNearHighLow(type: 'high' | 'low' = 'high', marketCode: 
     `${BASE_URL}/uapi/domestic-stock/v1/ranking/near-new-highlow?${params}`,
     { headers, cache: 'no-store' }
   );
-  if (!res.ok) throw new Error(`Near high/low failed: ${res.status}`);
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    console.error(`[KIS] Near highlow HTTP ${res.status}: ${body.slice(0, 200)}`);
+    throw new Error(`Near high/low failed: ${res.status}`);
+  }
   const data = await res.json();
-  return (data.output || []).slice(0, 20).map((item: Record<string, string>) => ({
-    rank: Number(item.data_rank),
-    code: item.stck_shrn_iscd || item.mksc_shrn_iscd,
-    name: item.hts_kor_isnm,
-    price: Number(item.stck_prpr),
-    change: Number(item.prdy_vrss),
-    changeRate: Number(item.prdy_ctrt),
-    volume: Number(item.acml_vol),
-    highPrice52w: Number(item.stck_dryy_hgpr || 0),
-    lowPrice52w: Number(item.stck_dryy_lwpr || 0),
-  }));
+  const items = extractItems(data);
+  console.log(`[KIS] Near highlow (${type}): ${items.length} items`);
+  return items.slice(0, 20).map(parseRankItem);
 }
 
 /** 한투 API 설정 여부 확인 */

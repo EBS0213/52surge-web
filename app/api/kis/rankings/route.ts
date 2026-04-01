@@ -40,9 +40,11 @@ export async function GET(request: NextRequest) {
 
   try {
     const data = await fetchRankingData(type);
+    console.log(`[rankings] ${type}: ${data.items.length} items`);
     cacheMap.set(cacheKey, { data, fetchedAt: Date.now() });
     return NextResponse.json(data);
   } catch (error) {
+    console.error(`[rankings] ${type} error:`, error instanceof Error ? error.message : error);
     return NextResponse.json(
       { error: `순위 조회 실패: ${error instanceof Error ? error.message : ''}` },
       { status: 500 }

@@ -283,10 +283,14 @@ async function fetchIndex(code: string, name: string, periodKey: PeriodKey = '3m
     await new Promise((r) => setTimeout(r, 100)); // rate limit
     const page2 = await fetchIndexPage(code, token, headers, start2, end2, config.periodCode);
 
-    // 합산 (과거→최신 정렬) + 중복 제거
-    const allChart = [...page2.chart, ...page1.chart].reverse(); // KIS는 최신→과거 순 반환
+    // KIS API는 최신→과거 순 반환. 각각 뒤집어서 과거→최신으로 만든 뒤 합산
+    const olderData = [...page2.chart].reverse(); // 과거 데이터 (오래된→최신)
+    const recentData = [...page1.chart].reverse(); // 최근 데이터 (오래된→최신)
+    const merged = [...olderData, ...recentData];  // 전체: 과거→최신
+
+    // 중복 제거 (날짜 기준)
     const seen = new Set<string>();
-    const chart = allChart.filter((c) => {
+    const chart = merged.filter((c) => {
       if (seen.has(c.date)) return false;
       seen.add(c.date);
       return true;

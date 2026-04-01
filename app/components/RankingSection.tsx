@@ -46,10 +46,15 @@ export default function RankingSection({ onStockClick }: { onStockClick?: (stock
     setLoading(true);
     try {
       const res = await fetch(`/api/kis/rankings?type=${type}`);
-      if (!res.ok) throw new Error('Failed');
-      const result: RankingData = await res.json();
-      dataRef.current.set(type, result);
-      setData(result);
+      const result = await res.json();
+      // API 에러 응답 체크
+      if (result.error || !result.items || result.items.length === 0) {
+        console.log('[RankingSection] Empty or error:', result);
+        setData(null);
+      } else {
+        dataRef.current.set(type, result);
+        setData(result);
+      }
     } catch {
       setData(null);
     } finally {
