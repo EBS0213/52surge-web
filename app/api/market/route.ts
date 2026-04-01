@@ -5,6 +5,8 @@
  */
 
 import { NextResponse, type NextRequest } from 'next/server';
+import { readFileSync, writeFileSync } from 'fs';
+import { join } from 'path';
 import { getAccessToken, isKISConfigured } from '../../lib/kis-client';
 
 const BASE_URL = process.env.KIS_BASE_URL || 'https://openapi.koreainvestment.com:9443';
@@ -13,7 +15,33 @@ const APP_SECRET = process.env.KIS_APP_SECRET || '';
 
 // 캐시 - 기간별 캐시
 const cacheMap = new Map<string, { data: unknown; fetchedAt: number }>();
-const CACHE_TTL = 5 * 60 * 1000; // 5분 (200일 데이터라 자주 바뀌지 않음)
+const CACHE_TTL = 5 * 60 * 1000; // 5분
+const CACHE_FILE = join(process.cwd(), '.cache-market.json');
+
+// 파일 캐시에서 복원 (PM2 재시작 시 즉시 응답)
+function loadFileCache() {
+  try {
+    const raw = readFileSync(CACHE_FILE, 'utf-8');
+    const entries: Record<string, { data: unknown; fetchedAt: number }> = JSON.parse(raw);
+    for (const [key, val] of Object.entries(entries)) {
+      cacheMap.set(key, val);
+    }
+    console.log('[market] file cache restored:', Object.keys(entries).join(', '));
+  } catch { /* 파일 없으면 무시 */ }
+}
+
+function saveFileCache() {
+  try {
+    const obj: Record<string, unknown> = {};
+    for (const [key, val] of cacheMap.entries()) {
+      obj[key] = val;
+    }
+    writeFileSync(CACHE_FILE, JSON.stringify(obj), 'utf-8');
+  } catch { /* 무시 */ }
+}
+
+// 서버 시작 시 파일 캐시 복원
+loadFileCache();
 
 // 서버 시작 시 일봉 캐시 워밍업 (첫 방문 대기 제거)
 let warmupDone = false;
@@ -23,11 +51,12 @@ function warmupCache() {
   fetchMarketData('daily' as PeriodKey)
     .then((result) => {
       cacheMap.set('market_daily', { data: result, fetchedAt: Date.now() });
+      saveFileCache();
       console.log('[market] daily cache warmed up');
     })
     .catch(() => {});
 }
-// 모듈 로드 시 워밍업 시작
+// 모듈 로드 시 워밍업 시작 (파일 캐시 없을 때만 의미 있지만 항상 갱신)
 setTimeout(warmupCache, 3000);
 
 // 기간 설정
@@ -324,6 +353,7 @@ async function fetchMarketData(periodKey: PeriodKey) {
 async function refreshCache(periodKey: PeriodKey, cacheKey: string) {
   const result = await fetchMarketData(periodKey);
   cacheMap.set(cacheKey, { data: result, fetchedAt: Date.now() });
+  saveFileCache();
 }
 
 export async function GET(request: NextRequest) {
@@ -361,6 +391,7 @@ export async function GET(request: NextRequest) {
   try {
     const result = await fetchMarketData(validPeriod);
     cacheMap.set(cacheKey, { data: result, fetchedAt: Date.now() });
+    saveFileCache();
     return NextResponse.json(result);
   } catch (error) {
     return NextResponse.json(

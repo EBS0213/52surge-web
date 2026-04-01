@@ -535,27 +535,29 @@ export default function MarketIndex() {
   const [data, setData] = useState<MarketData | null>(null);
   const [error, setError] = useState(false);
   const isMounted = useRef(true);
+  const dataRef = useRef<MarketData | null>(null);
 
   const fetchData = useCallback(async () => {
     try {
       const res = await fetch('/api/market?period=daily');
       if (!res.ok) {
-        if (isMounted.current && !data) setError(true);
+        if (isMounted.current && !dataRef.current) setError(true);
         return;
       }
       const result = await res.json();
       if (result.error) {
-        if (isMounted.current && !data) setError(true);
+        if (isMounted.current && !dataRef.current) setError(true);
         return;
       }
       if (isMounted.current) {
+        dataRef.current = result;
         setData(result);
         setError(false);
       }
     } catch {
-      if (isMounted.current && !data) setError(true);
+      if (isMounted.current && !dataRef.current) setError(true);
     }
-  }, [data]);
+  }, []);
 
   useEffect(() => {
     isMounted.current = true;
