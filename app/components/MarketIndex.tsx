@@ -176,16 +176,31 @@ function useChartSize(containerRef: React.RefObject<HTMLDivElement | null>) {
 }
 
 /** SVG 캔들차트 + 이동평균선 + 볼린저밴드 */
+const DISPLAY_CANDLES = 60; // 차트에 보여줄 캔들 수
+
 function CandleChart({ data, height, overlays = new Set() }: { data: CandleData[]; height: number; overlays?: Set<OverlayKey> }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const width = useChartSize(containerRef);
 
   if (data.length < 3) return <div ref={containerRef} className="w-full" />;
 
-  const ma5 = overlays.has('ma5') ? calcMA(data, 5) : [];
-  const ma20 = overlays.has('ma20') ? calcMA(data, 20) : [];
-  const ma50 = overlays.has('ma50') ? calcMA(data, 50) : [];
-  const bb = overlays.has('bb') ? calcBB(data) : null;
+  // 전체 데이터로 MA/BB 계산 (정확한 값)
+  const ma5Full = overlays.has('ma5') ? calcMA(data, 5) : [];
+  const ma20Full = overlays.has('ma20') ? calcMA(data, 20) : [];
+  const ma50Full = overlays.has('ma50') ? calcMA(data, 50) : [];
+  const bbFull = overlays.has('bb') ? calcBB(data) : null;
+
+  // 차트 표시 영역: 마지막 DISPLAY_CANDLES 개만 (캔들 + MA/BB 슬라이스)
+  const offset = Math.max(0, data.length - DISPLAY_CANDLES);
+  const displayData = data.slice(offset);
+  const ma5 = ma5Full.slice(offset);
+  const ma20 = ma20Full.slice(offset);
+  const ma50 = ma50Full.slice(offset);
+  const bb = bbFull ? {
+    upper: bbFull.upper.slice(offset),
+    middle: bbFull.middle.slice(offset),
+    lower: bbFull.lower.slice(offset),
+  } : null;
 
   const padding = { top: 8, bottom: 28, left: 4, right: 52 };
   const chartW = width - padding.left - padding.right;
@@ -193,7 +208,7 @@ function CandleChart({ data, height, overlays = new Set() }: { data: CandleData[
 
   let allMin = Infinity;
   let allMax = -Infinity;
-  for (const d of data) {
+  for (const d of displayData) {
     if (d.low < allMin) allMin = d.low;
     if (d.high > allMax) allMax = d.high;
   }
@@ -204,8 +219,8 @@ function CandleChart({ data, height, overlays = new Set() }: { data: CandleData[
   }
   const range = allMax - allMin || 1;
 
-  const candleW = Math.max(1, (chartW / data.length) * 0.6);
-  const gap = chartW / data.length;
+  const candleW = Math.max(1, (chartW / displayData.length) * 0.6);
+  const gap = chartW / displayData.length;
 
   const toY = (v: number) => padding.top + chartH - ((v - allMin) / range) * chartH;
   const toX = (i: number) => padding.left + gap * i + gap / 2;
@@ -227,10 +242,10 @@ function CandleChart({ data, height, overlays = new Set() }: { data: CandleData[
     yTickValues.push(allMin + (range * i) / (yTicks - 1));
   }
 
-  const xLabelCount = Math.min(6, data.length);
+  const xLabelCount = Math.min(6, displayData.length);
   const xLabelIndices: number[] = [];
   for (let i = 0; i < xLabelCount; i++) {
-    xLabelIndices.push(Math.round((i * (data.length - 1)) / (xLabelCount - 1)));
+    xLabelIndices.push(Math.round((i * (displayData.length - 1)) / (xLabelCount - 1)));
   }
 
   return (
@@ -245,7 +260,7 @@ function CandleChart({ data, height, overlays = new Set() }: { data: CandleData[
         />
       ))}
 
-      {data.map((d, i) => {
+      {displayData.map((d, i) => {
         const isUp = d.close >= d.open;
         const color = isUp ? '#ef4444' : '#3b82f6';
         const x = toX(i);
@@ -306,7 +321,7 @@ function CandleChart({ data, height, overlays = new Set() }: { data: CandleData[
           fill="#a3a3a3"
           textAnchor="middle"
         >
-          {formatDateLabel(data[idx].date)}
+          {formatDateLabel(displayData[idx].date)}
         </text>
       ))}
 
