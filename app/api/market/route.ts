@@ -101,6 +101,7 @@ async function fetchIndexIntraday(code: string, name: string): Promise<IndexData
         FID_INPUT_ISCD: code,
         FID_INPUT_HOUR_1: time,
         FID_PW_DATA_INCU_YN: 'N',
+        FID_ETC_CLS_CODE: '',
       });
 
       const res = await fetch(
