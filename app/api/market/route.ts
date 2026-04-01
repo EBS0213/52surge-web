@@ -20,7 +20,7 @@ const CACHE_TTL = 1 * 60 * 1000; // 1분
 // 선형(MA 비표시): 1d(1일 10분봉), 3m, 1y, 3y, 5y
 type PeriodKey = 'daily' | 'weekly' | 'monthly' | '1d' | '3m' | '1y' | '3y' | '5y';
 const PERIOD_CONFIG: Record<string, { days: number; periodCode: string }> = {
-  'daily':   { days: 90, periodCode: 'D' },     // 일봉: 최근 90일
+  'daily':   { days: 200, periodCode: 'D' },     // 일봉: 최근 200일 (MA50 표시를 위해 충분한 데이터)
   'weekly':  { days: 380, periodCode: 'W' },     // 주봉: 최근 약 52주
   'monthly': { days: 1095, periodCode: 'M' },    // 월봉: 최근 약 3년
   '1d':      { days: 15, periodCode: 'D' },       // 1일: 최근 10거래일 일봉
