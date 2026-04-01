@@ -81,8 +81,13 @@ function calcBB(data: CandleData[], period = 20, mult = 2): { upper: (number | n
   return { upper, middle, lower };
 }
 
-/** 시장 상태 판단 */
-type MarketState = 'BULL' | 'NORMAL' | 'BEAR';
+/** 시장 상태 판단
+ * BULL: 10거래일 평균 > MA5, MA20, MA50 모두 상회
+ * NORMAL: 10거래일 평균 < MA5 이지만 > MA20, MA50 상회
+ * BEAR: 10거래일 평균 < MA5, MA20 하회
+ * FEAR: 당일 종가가 순간적으로 MA20 또는 MA50 아래
+ */
+type MarketState = 'BULL' | 'NORMAL' | 'BEAR' | 'FEAR';
 
 function getMarketState(data: CandleData[]): { state: MarketState; ma5: number; ma20: number; ma50: number } {
   const closes = data.map(d => d.close);
@@ -92,14 +97,25 @@ function getMarketState(data: CandleData[]): { state: MarketState; ma5: number; 
   const ma5 = closes.slice(len - 5).reduce((a, b) => a + b, 0) / 5;
   const ma20 = closes.slice(len - 20).reduce((a, b) => a + b, 0) / 20;
   const ma50 = len >= 50 ? closes.slice(len - 50).reduce((a, b) => a + b, 0) / 50 : 0;
-  const current = closes[len - 1];
+  const ma10 = len >= 10 ? closes.slice(len - 10).reduce((a, b) => a + b, 0) / 10 : closes[len - 1];
+  const todayClose = closes[len - 1];
 
   let state: MarketState;
-  if (current > ma5) {
-    state = 'BULL';
-  } else if (current < ma20) {
+
+  // FEAR 최우선: 당일 종가가 MA20 또는 MA50 아래를 찍은 경우
+  if (todayClose < ma20 || (ma50 > 0 && todayClose < ma50)) {
+    state = 'FEAR';
+  }
+  // BEAR: 10거래일 평균 < MA5 AND < MA20
+  else if (ma10 < ma5 && ma10 < ma20) {
     state = 'BEAR';
-  } else {
+  }
+  // BULL: 10거래일 평균 > MA5, MA20, MA50 모두 상회
+  else if (ma10 >= ma5 && ma10 >= ma20 && (ma50 === 0 || ma10 >= ma50)) {
+    state = 'BULL';
+  }
+  // NORMAL: 그 외 (MA5 하회하지만 MA20은 상회 등)
+  else {
     state = 'NORMAL';
   }
 
@@ -108,8 +124,9 @@ function getMarketState(data: CandleData[]): { state: MarketState; ma5: number; 
 
 function stateColor(s: MarketState) {
   if (s === 'BULL') return { bg: 'bg-red-50', text: 'text-red-600', border: 'border-red-200', dot: 'bg-red-500' };
+  if (s === 'FEAR') return { bg: 'bg-violet-50', text: 'text-violet-600', border: 'border-violet-200', dot: 'bg-violet-500' };
   if (s === 'BEAR') return { bg: 'bg-blue-50', text: 'text-blue-600', border: 'border-blue-200', dot: 'bg-blue-500' };
-  return { bg: 'bg-gray-50', text: 'text-gray-600', border: 'border-gray-200', dot: 'bg-gray-400' };
+  return { bg: 'bg-yellow-50', text: 'text-yellow-600', border: 'border-yellow-200', dot: 'bg-yellow-500' };
 }
 
 

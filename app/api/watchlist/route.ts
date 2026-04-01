@@ -7,7 +7,7 @@
  */
 
 import { NextResponse, type NextRequest } from 'next/server';
-import { getDailyChart, getCurrentPrice, isKISConfigured } from '../../lib/kis-client';
+import { getDailyChart } from '../../lib/kis-client';
 import {
   calculateN,
   calculatePosition,
@@ -146,21 +146,15 @@ function today(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-/** 워치리스트 종목 상세 정보 계산 */
+/** 워치리스트 종목 상세 정보 계산 (scanPrice: 스캐너에서 받은 현재가) */
 async function enrichEntry(
   entry: WatchlistEntry,
-  settings: TurtleSettings
+  settings: TurtleSettings,
+  scanPrice?: number
 ): Promise<WatchlistStock> {
   const candles = await getCachedChart(entry.code, 90);
-  let currentPrice = entry.entryPrice;
-
-  // 현재가 조회
-  if (isKISConfigured()) {
-    try {
-      const priceData = await getCurrentPrice(entry.code);
-      currentPrice = Number(priceData.stck_prpr) || entry.entryPrice;
-    } catch { /* fallback to entry price */ }
-  }
+  // 스캐너 현재가 우선 사용 → KIS API 호출 제거 (성능 개선)
+  let currentPrice = scanPrice || entry.entryPrice;
 
   const nValue = calculateN(candles);
   const pos = calculatePosition(entry.entryPrice, currentPrice, settings);
@@ -260,7 +254,9 @@ export async function GET() {
     saveState(savedSettings, savedEntries);
 
     // 2. 각 편입 종목 상세 정보 계산 (병렬 배치)
-    const BATCH = 5;
+    // 스캔 데이터에서 현재가 매핑 (KIS API 현재가 호출 제거 → 속도 대폭 개선)
+    const scanPriceMap = new Map(scanStocks.map((s) => [s.code, s.close]));
+    const BATCH = 10;
     const enrichedStocks: WatchlistStock[] = [];
 
     for (let i = 0; i < savedEntries.length; i += BATCH) {
@@ -268,7 +264,8 @@ export async function GET() {
       const results = await Promise.all(
         batch.map(async (entry) => {
           try {
-            return await enrichEntry(entry, savedSettings);
+            const scanPrice = scanPriceMap.get(entry.code);
+            return await enrichEntry(entry, savedSettings, scanPrice);
           } catch {
             return {
               code: entry.code,
@@ -276,7 +273,7 @@ export async function GET() {
               system: entry.system,
               entryDate: entry.entryDate,
               entryPrice: entry.entryPrice,
-              currentPrice: entry.entryPrice,
+              currentPrice: scanPriceMap.get(entry.code) || entry.entryPrice,
               high20d: 0, low10d: 0, high55d: 0, low20d: 0,
               nValue: 0, unitSize: 0, unitAmount: 0,
               stopPrice: 0, riskPerShare: 0, positionPct: 0, rrr: 0,
@@ -288,7 +285,6 @@ export async function GET() {
         })
       );
       enrichedStocks.push(...results);
-      if (i + BATCH < savedEntries.length) await new Promise((r) => setTimeout(r, 80));
     }
 
     // 3. 매도 시그널 종목은 삭제하지 않고 sellSignal=true로 표시만 유지
