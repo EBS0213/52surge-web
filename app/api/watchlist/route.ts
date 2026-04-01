@@ -208,83 +208,85 @@ export async function GET() {
     savedArchive = cleanExpiredArchive(savedArchive);
     const archivedCodes = new Set(savedArchive.map((a) => a.code));
 
-    // 스캔 종목 중 아직 편입되지 않은 종목에 대해 시그널 확인
-    for (const stock of scanStocks) {
-      if (existingCodes.has(stock.code)) continue;
+    // 스캔 종목 중 아직 편입되지 않은 종목에 대해 시그널 확인 (병렬 배치)
+    const newStocks = scanStocks.filter((s) => !existingCodes.has(s.code));
+    const BATCH = 5;
+    for (let i = 0; i < newStocks.length; i += BATCH) {
+      const batch = newStocks.slice(i, i + BATCH);
+      await Promise.all(
+        batch.map(async (stock) => {
+          try {
+            const candles = await getCachedChart(stock.code, 90);
+            if (candles.length < 20) return;
 
-      try {
-        const candles = await getCachedChart(stock.code, 90);
-        if (candles.length < 20) continue;
+            if (isSystem1Entry(stock.close, candles)) {
+              savedEntries.push({
+                code: stock.code,
+                name: stock.name,
+                system: 'system1',
+                entryDate: today(),
+                entryPrice: stock.close,
+              });
+              existingCodes.add(stock.code);
+              if (archivedCodes.has(stock.code)) {
+                savedArchive = savedArchive.filter((a) => a.code !== stock.code);
+                archivedCodes.delete(stock.code);
+              }
+              return;
+            }
 
-        // 시스템1 진입: 20일 최고가 돌파
-        if (isSystem1Entry(stock.close, candles)) {
-          savedEntries.push({
-            code: stock.code,
-            name: stock.name,
-            system: 'system1',
-            entryDate: today(),
-            entryPrice: stock.close,
-          });
-          existingCodes.add(stock.code);
-          // 아카이브에 있었으면 제거 (재편입)
-          if (archivedCodes.has(stock.code)) {
-            savedArchive = savedArchive.filter((a) => a.code !== stock.code);
-            archivedCodes.delete(stock.code);
-          }
-          continue;
-        }
-
-        // 시스템2 진입: 55일 최고가 돌파
-        if (candles.length >= 55 && isSystem2Entry(stock.close, candles)) {
-          savedEntries.push({
-            code: stock.code,
-            name: stock.name,
-            system: 'system2',
-            entryDate: today(),
-            entryPrice: stock.close,
-          });
-          existingCodes.add(stock.code);
-          if (archivedCodes.has(stock.code)) {
-            savedArchive = savedArchive.filter((a) => a.code !== stock.code);
-            archivedCodes.delete(stock.code);
-          }
-        }
-      } catch {
-        // 개별 종목 실패 시 건너뜀
-      }
-
-      // KIS API rate limiting
-      await new Promise((r) => setTimeout(r, 80));
+            if (candles.length >= 55 && isSystem2Entry(stock.close, candles)) {
+              savedEntries.push({
+                code: stock.code,
+                name: stock.name,
+                system: 'system2',
+                entryDate: today(),
+                entryPrice: stock.close,
+              });
+              existingCodes.add(stock.code);
+              if (archivedCodes.has(stock.code)) {
+                savedArchive = savedArchive.filter((a) => a.code !== stock.code);
+                archivedCodes.delete(stock.code);
+              }
+            }
+          } catch { /* skip */ }
+        })
+      );
+      if (i + BATCH < newStocks.length) await new Promise((r) => setTimeout(r, 80));
     }
 
     // 스캔 후 변경사항 저장
     saveState(savedSettings, savedEntries);
 
-    // 2. 각 편입 종목 상세 정보 계산
+    // 2. 각 편입 종목 상세 정보 계산 (병렬 배치)
     const enrichedStocks: WatchlistStock[] = [];
 
-    for (const entry of savedEntries) {
-      try {
-        const stock = await enrichEntry(entry, savedSettings);
-        enrichedStocks.push(stock);
-      } catch {
-        // enrich 실패 시에도 기본 정보로 표시 (종목이 사라지지 않도록)
-        enrichedStocks.push({
-          code: entry.code,
-          name: entry.name,
-          system: entry.system,
-          entryDate: entry.entryDate,
-          entryPrice: entry.entryPrice,
-          currentPrice: entry.entryPrice,
-          high20d: 0, low10d: 0, high55d: 0, low20d: 0,
-          nValue: 0, unitSize: 0, unitAmount: 0,
-          stopPrice: 0, riskPerShare: 0, positionPct: 0, rrr: 0,
-          pnlPct: 0, tradingDays: 0,
-          sellSignal: false,
-          sellReason: undefined,
-        });
-      }
-      await new Promise((r) => setTimeout(r, 80));
+    for (let i = 0; i < savedEntries.length; i += BATCH) {
+      const batch = savedEntries.slice(i, i + BATCH);
+      const results = await Promise.all(
+        batch.map(async (entry) => {
+          try {
+            return await enrichEntry(entry, savedSettings);
+          } catch {
+            return {
+              code: entry.code,
+              name: entry.name,
+              system: entry.system,
+              entryDate: entry.entryDate,
+              entryPrice: entry.entryPrice,
+              currentPrice: entry.entryPrice,
+              high20d: 0, low10d: 0, high55d: 0, low20d: 0,
+              nValue: 0, unitSize: 0, unitAmount: 0,
+              stopPrice: 0, riskPerShare: 0, positionPct: 0, rrr: 0,
+              pnlPct: 0, tradingDays: 0,
+              sellSignal: false,
+              sellReason: undefined,
+            } as WatchlistStock;
+          }
+        })
+      );
+      enrichedStocks.push(...results);
+      if (i + BATCH < savedEntries.length) await new Promise((r) => setTimeout(r, 80));
     }
 
     // 3. 매도 시그널 종목은 삭제하지 않고 sellSignal=true로 표시만 유지
