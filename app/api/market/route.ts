@@ -13,7 +13,22 @@ const APP_SECRET = process.env.KIS_APP_SECRET || '';
 
 // 캐시 - 기간별 캐시
 const cacheMap = new Map<string, { data: unknown; fetchedAt: number }>();
-const CACHE_TTL = 1 * 60 * 1000; // 1분
+const CACHE_TTL = 5 * 60 * 1000; // 5분 (200일 데이터라 자주 바뀌지 않음)
+
+// 서버 시작 시 일봉 캐시 워밍업 (첫 방문 대기 제거)
+let warmupDone = false;
+function warmupCache() {
+  if (warmupDone || !isKISConfigured()) return;
+  warmupDone = true;
+  fetchMarketData('daily' as PeriodKey)
+    .then((result) => {
+      cacheMap.set('market_daily', { data: result, fetchedAt: Date.now() });
+      console.log('[market] daily cache warmed up');
+    })
+    .catch(() => {});
+}
+// 모듈 로드 시 워밍업 시작
+setTimeout(warmupCache, 3000);
 
 // 기간 설정
 // 캔들스틱(MA 시각화): daily(일봉), weekly(주봉), monthly(월봉)
