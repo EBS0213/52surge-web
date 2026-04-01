@@ -247,6 +247,18 @@ async function fetchIndexPage(
   return { output1, chart };
 }
 
+/**
+ * 페이지네이션 설정: MA50 + DISPLAY_CANDLES(60)에 충분한 데이터 확보
+ * - daily:  최소 200 거래일 필요 → 2페이지 (200일 + 200일)
+ * - weekly: 최소 110주 필요 → 2페이지 (400일 + 400일)
+ * - monthly: 36개월 정도면 MA20까지 가능 (MA50은 구조적 한계)
+ */
+const PAGINATION_RANGES: Record<string, { page1Days: number; page2Days: number } | null> = {
+  daily:   { page1Days: 200, page2Days: 400 },  // 0~200일, 201~400일
+  weekly:  { page1Days: 400, page2Days: 800 },  // 0~400일, 401~800일
+  monthly: null, // 단일 호출 (1095일 = 3년)
+};
+
 /** 업종 기간별 시세 (일/주/월봉) — 페이지네이션으로 충분한 데이터 확보 */
 async function fetchIndex(code: string, name: string, periodKey: PeriodKey = '3m'): Promise<IndexData> {
   const token = await getAccessToken();
@@ -261,42 +273,40 @@ async function fetchIndex(code: string, name: string, periodKey: PeriodKey = '3m
 
   const config = PERIOD_CONFIG[periodKey];
   const today = new Date();
+  const paginationConfig = PAGINATION_RANGES[periodKey];
 
-  // 일봉(daily)일 때 MA50 계산에 충분한 데이터 확보를 위해 페이지네이션
-  // KIS API는 한 호출에 약 100건 제한 → 2번 호출하여 합산
-  const needsPagination = periodKey === 'daily' && config.days >= 200;
+  // 페이지네이션이 필요한 기간 (daily, weekly)
+  if (paginationConfig) {
+    const { page1Days, page2Days } = paginationConfig;
 
-  if (needsPagination) {
-    // 1차: 최근 200일
-    const end1 = today;
+    // 1차: 최근 데이터
     const start1 = new Date();
-    start1.setDate(today.getDate() - 200);
+    start1.setDate(today.getDate() - page1Days);
 
-    // 2차: 200~400일 전
+    // 2차: 과거 데이터
     const end2 = new Date();
-    end2.setDate(today.getDate() - 201);
+    end2.setDate(today.getDate() - page1Days - 1);
     const start2 = new Date();
-    start2.setDate(today.getDate() - 400);
+    start2.setDate(today.getDate() - page2Days);
 
-    // 병렬 호출 (API rate limit 고려하여 순차 처리)
-    const page1 = await fetchIndexPage(code, token, headers, start1, end1, config.periodCode);
-    await new Promise((r) => setTimeout(r, 100)); // rate limit
+    // 순차 호출 (API rate limit)
+    const page1 = await fetchIndexPage(code, token, headers, start1, today, config.periodCode);
+    await new Promise((r) => setTimeout(r, 100));
     const page2 = await fetchIndexPage(code, token, headers, start2, end2, config.periodCode);
 
-    // KIS API는 최신→과거 순 반환. 각각 뒤집어서 과거→최신으로 만든 뒤 합산
-    const olderData = [...page2.chart].reverse(); // 과거 데이터 (오래된→최신)
-    const recentData = [...page1.chart].reverse(); // 최근 데이터 (오래된→최신)
-    const merged = [...olderData, ...recentData];  // 전체: 과거→최신
-
-    // 중복 제거 (날짜 기준)
+    // 합산 + 날짜 기준 중복 제거 + 정렬
+    const all = [...page1.chart, ...page2.chart];
     const seen = new Set<string>();
-    const chart = merged.filter((c) => {
-      if (seen.has(c.date)) return false;
+    const deduped = all.filter((c) => {
+      if (!c.date || seen.has(c.date)) return false;
       seen.add(c.date);
       return true;
     });
 
-    console.log(`[market] ${name} paginated: page1=${page1.chart.length}, page2=${page2.chart.length}, merged=${chart.length}`);
+    // 날짜 오름차순 정렬 (과거→최신) — 이게 핵심!
+    const chart = deduped.sort((a, b) => a.date.localeCompare(b.date));
+
+    console.log(`[market] ${name} ${periodKey}: page1=${page1.chart.length}, page2=${page2.chart.length}, merged=${chart.length}`);
 
     return {
       name,
@@ -308,12 +318,13 @@ async function fetchIndex(code: string, name: string, periodKey: PeriodKey = '3m
     };
   }
 
-  // 일봉 외 (주봉/월봉/단기) → 단일 호출
+  // 페이지네이션 불필요 (monthly, 단기) → 단일 호출
   const startDate = new Date();
   startDate.setDate(today.getDate() - config.days);
 
   const page = await fetchIndexPage(code, token, headers, startDate, today, config.periodCode);
-  const chart = page.chart.reverse(); // 과거→최신
+  // 날짜 오름차순 정렬
+  const chart = page.chart.sort((a, b) => a.date.localeCompare(b.date));
 
   return {
     name,
