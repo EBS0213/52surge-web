@@ -1,5 +1,12 @@
 import { NextResponse } from 'next/server';
-import { getDailyChart, isKISConfigured } from '../../../lib/kis-client';
+import { getDailyChart, getCurrentPrice, isKISConfigured } from '../../../lib/kis-client';
+
+// 기간 설정
+const PERIOD_MAP: Record<string, { days: number; code: 'D' | 'W' | 'M' }> = {
+  daily:   { days: 120, code: 'D' },   // 일봉: ~80거래일
+  weekly:  { days: 400, code: 'W' },   // 주봉: ~55주
+  monthly: { days: 1100, code: 'M' },  // 월봉: ~36개월
+};
 
 export async function GET(request: Request) {
   if (!isKISConfigured()) {
@@ -11,16 +18,18 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url);
   const code = searchParams.get('code');
-  const days = parseInt(searchParams.get('days') || '90', 10);
+  const period = searchParams.get('period') || 'daily';
+  const withInfo = searchParams.get('info') === '1';
 
   if (!code) {
     return NextResponse.json({ error: 'Missing code parameter' }, { status: 400 });
   }
 
-  // 기간 계산
+  const config = PERIOD_MAP[period] || PERIOD_MAP.daily;
+
   const endDate = new Date();
   const startDate = new Date();
-  startDate.setDate(startDate.getDate() - days);
+  startDate.setDate(startDate.getDate() - config.days);
 
   const fmt = (d: Date) =>
     d.getFullYear().toString() +
@@ -28,8 +37,23 @@ export async function GET(request: Request) {
     String(d.getDate()).padStart(2, '0');
 
   try {
-    const candles = await getDailyChart(code, fmt(startDate), fmt(endDate));
-    return NextResponse.json(candles, {
+    // 차트 + (선택적) 기업정보 동시 요청
+    const promises: [Promise<unknown>, Promise<unknown> | null] = [
+      getDailyChart(code, fmt(startDate), fmt(endDate), config.code),
+      withInfo ? getCurrentPrice(code) : null,
+    ];
+
+    const [candles, priceInfo] = await Promise.all([
+      promises[0],
+      promises[1] || Promise.resolve(null),
+    ]);
+
+    const result: Record<string, unknown> = { candles };
+    if (priceInfo) {
+      result.info = priceInfo;
+    }
+
+    return NextResponse.json(result, {
       headers: { 'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600' },
     });
   } catch (error) {

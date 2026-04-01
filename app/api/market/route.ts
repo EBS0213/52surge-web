@@ -23,7 +23,7 @@ const PERIOD_CONFIG: Record<string, { days: number; periodCode: string }> = {
   'daily':   { days: 90, periodCode: 'D' },     // 일봉: 최근 90일
   'weekly':  { days: 380, periodCode: 'W' },     // 주봉: 최근 약 52주
   'monthly': { days: 1095, periodCode: 'M' },    // 월봉: 최근 약 3년
-  '1d':      { days: 1, periodCode: 'D' },       // 1일: 인트라데이 fallback
+  '1d':      { days: 15, periodCode: 'D' },       // 1일: 최근 10거래일 일봉
   '3m':      { days: 100, periodCode: 'D' },     // 3개월: 일봉 선형
   '1y':      { days: 380, periodCode: 'D' },     // 1년: 일봉 선형
   '3y':      { days: 1095, periodCode: 'W' },    // 3년: 주봉 선형
@@ -165,13 +165,7 @@ async function fetchIndexIntraday(code: string, name: string): Promise<IndexData
 
 /** 업종 기간별 시세 (일/주/월봉) */
 async function fetchIndex(code: string, name: string, periodKey: PeriodKey = '3m'): Promise<IndexData> {
-  // 1일 → 10분봉 (실패 시 최근 1일 일봉으로 fallback)
-  if (periodKey === '1d') {
-    try {
-      const result = await fetchIndexIntraday(code, name);
-      if (result.chart.length > 0) return result;
-    } catch { /* fallback to daily */ }
-  }
+  // 1일 → 최근 10거래일 일봉 (KIS 업종 분봉 API 미지원)
 
   const token = await getAccessToken();
   const headers: Record<string, string> = {
@@ -319,7 +313,7 @@ async function refreshCache(periodKey: PeriodKey, cacheKey: string) {
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
-  const period = (searchParams.get('period') || '1d') as PeriodKey;
+  const period = (searchParams.get('period') || 'daily') as PeriodKey;
   const validPeriod = (PERIOD_CONFIG[period] || period === '1d') ? period : 'daily';
   const cacheKey = `market_${validPeriod}`;
 

@@ -76,11 +76,12 @@ export async function getCurrentPrice(stockCode: string) {
   return data.output;
 }
 
-/** 국내 주식 기간별 시세 (일봉) - FHKST03010100 */
+/** 국내 주식 기간별 시세 (일/주/월봉) - FHKST03010100 */
 export async function getDailyChart(
   stockCode: string,
   startDate: string, // YYYYMMDD
-  endDate: string     // YYYYMMDD
+  endDate: string,    // YYYYMMDD
+  periodCode: 'D' | 'W' | 'M' = 'D'
 ) {
   const headers = await makeHeaders('FHKST03010100');
   const params = new URLSearchParams({
@@ -88,7 +89,7 @@ export async function getDailyChart(
     FID_INPUT_ISCD: stockCode,
     FID_INPUT_DATE_1: startDate,
     FID_INPUT_DATE_2: endDate,
-    FID_PERIOD_DIV_CODE: 'D',
+    FID_PERIOD_DIV_CODE: periodCode,
     FID_ORG_ADJ_PRC: '0', // 수정주가 반영
   });
 

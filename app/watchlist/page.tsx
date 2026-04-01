@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useWatchlist } from '../hooks/useWatchlist';
 import type { TurtleSettings, WatchlistStock, TurtleSystem } from '../types/stock';
 import Link from 'next/link';
@@ -26,14 +26,32 @@ function SettingsPanel({
   onUpdate,
 }: {
   settings: TurtleSettings;
-  onUpdate: (s: Partial<TurtleSettings>) => void;
+  onUpdate: (s: Partial<TurtleSettings>) => void | Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(settings);
+  const [saving, setSaving] = useState(false);
 
-  const handleSave = () => {
-    onUpdate(form);
-    setOpen(false);
+  // settings prop이 변경되면 form도 동기화
+  useEffect(() => {
+    setForm(settings);
+  }, [settings]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await onUpdate(form);
+    } finally {
+      setSaving(false);
+      setOpen(false);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleSave();
+    }
   };
 
   if (!open) {
@@ -97,9 +115,9 @@ function SettingsPanel({
                 <input
                   type="text"
                   inputMode="decimal"
-                  step={step}
-                  value={toPctDisplay(key, form[key]) || ''}
+                  value={toPctDisplay(key, form[key]).toString()}
                   onFocus={(e) => e.target.select()}
+                  onKeyDown={handleKeyDown}
                   onChange={(e) => {
                     const raw = e.target.value;
                     if (raw === '' || raw === '-') {
@@ -120,8 +138,8 @@ function SettingsPanel({
         ))}
       </div>
       <div className="flex gap-3 mt-4">
-        <button onClick={handleSave} className="bg-black text-white px-6 py-2 rounded-lg text-sm hover:bg-gray-800 transition-colors">
-          저장
+        <button onClick={handleSave} disabled={saving} className="bg-black text-white px-6 py-2 rounded-lg text-sm hover:bg-gray-800 transition-colors disabled:opacity-50">
+          {saving ? '저장 중...' : '저장'}
         </button>
         <button onClick={() => setOpen(false)} className="text-gray-500 px-4 py-2 text-sm hover:text-black">
           취소

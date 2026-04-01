@@ -26,22 +26,21 @@ interface MarketData {
   period?: string;
 }
 
-type PeriodKey = 'daily' | 'weekly' | 'monthly' | '1d' | '3m' | '1y' | '3y' | '5y';
-
-// 캔들스틱 차트 (MA 시각화): 일봉, 주봉, 월봉
-// 선형 차트 (MA 비표시): 1일, 3개월, 1년, 3년, 5년
-const CANDLE_PERIODS: PeriodKey[] = ['daily', 'weekly', 'monthly'];
-const LINE_PERIODS: PeriodKey[] = ['1d', '3m', '1y', '3y', '5y'];
+type PeriodKey = 'daily' | 'weekly' | 'monthly';
 
 const PERIOD_LABELS: { key: PeriodKey; label: string }[] = [
   { key: 'daily', label: '일봉' },
   { key: 'weekly', label: '주봉' },
   { key: 'monthly', label: '월봉' },
-  { key: '1d', label: '1일' },
-  { key: '3m', label: '3개월' },
-  { key: '1y', label: '1년' },
-  { key: '3y', label: '3년' },
-  { key: '5y', label: '5년' },
+];
+
+// 오버레이 토글 키
+type OverlayKey = 'ma5' | 'ma20' | 'ma50' | 'bb';
+const OVERLAY_LABELS: { key: OverlayKey; label: string; color: string }[] = [
+  { key: 'ma5', label: 'MA5', color: '#f59e0b' },
+  { key: 'ma20', label: 'MA20', color: '#8b5cf6' },
+  { key: 'ma50', label: 'MA50', color: '#06b6d4' },
+  { key: 'bb', label: 'BB', color: '#ec4899' },
 ];
 
 interface InvestorData {
@@ -62,17 +61,37 @@ function calcMA(data: CandleData[], period: number): (number | null)[] {
   });
 }
 
+/** 볼린저밴드 계산 (20일, 2표준편차) */
+function calcBB(data: CandleData[], period = 20, mult = 2): { upper: (number | null)[]; middle: (number | null)[]; lower: (number | null)[] } {
+  const upper: (number | null)[] = [];
+  const middle: (number | null)[] = [];
+  const lower: (number | null)[] = [];
+  for (let i = 0; i < data.length; i++) {
+    if (i < period - 1) { upper.push(null); middle.push(null); lower.push(null); continue; }
+    let sum = 0;
+    for (let j = i - period + 1; j <= i; j++) sum += data[j].close;
+    const avg = sum / period;
+    let sqSum = 0;
+    for (let j = i - period + 1; j <= i; j++) sqSum += (data[j].close - avg) ** 2;
+    const std = Math.sqrt(sqSum / period);
+    middle.push(avg);
+    upper.push(avg + mult * std);
+    lower.push(avg - mult * std);
+  }
+  return { upper, middle, lower };
+}
+
 /** 시장 상태 판단 */
 type MarketState = 'BULL' | 'NORMAL' | 'BEAR';
 
-function getMarketState(data: CandleData[]): { state: MarketState; ma5: number; ma10: number; ma20: number } {
+function getMarketState(data: CandleData[]): { state: MarketState; ma5: number; ma20: number; ma50: number } {
   const closes = data.map(d => d.close);
   const len = closes.length;
-  if (len < 20) return { state: 'NORMAL', ma5: 0, ma10: 0, ma20: 0 };
+  if (len < 20) return { state: 'NORMAL', ma5: 0, ma20: 0, ma50: 0 };
 
   const ma5 = closes.slice(len - 5).reduce((a, b) => a + b, 0) / 5;
-  const ma10 = closes.slice(len - 10).reduce((a, b) => a + b, 0) / 10;
   const ma20 = closes.slice(len - 20).reduce((a, b) => a + b, 0) / 20;
+  const ma50 = len >= 50 ? closes.slice(len - 50).reduce((a, b) => a + b, 0) / 50 : 0;
   const current = closes[len - 1];
 
   let state: MarketState;
@@ -84,7 +103,7 @@ function getMarketState(data: CandleData[]): { state: MarketState; ma5: number; 
     state = 'NORMAL';
   }
 
-  return { state, ma5, ma10, ma20 };
+  return { state, ma5, ma20, ma50 };
 }
 
 function stateColor(s: MarketState) {
@@ -93,9 +112,6 @@ function stateColor(s: MarketState) {
   return { bg: 'bg-gray-50', text: 'text-gray-600', border: 'border-gray-200', dot: 'bg-gray-400' };
 }
 
-function isCandlePeriod(period: PeriodKey): boolean {
-  return CANDLE_PERIODS.includes(period);
-}
 
 /** 날짜 포맷 (일봉: "20260330" → "3/30", 분봉: "0930" or "093000" → "09:30") */
 function formatDateLabel(dateStr: string): string {
@@ -139,16 +155,17 @@ function useChartSize(containerRef: React.RefObject<HTMLDivElement | null>) {
   return width;
 }
 
-/** SVG 캔들차트 + 이동평균선 + Y축 수치 + X축 날짜 */
-function CandleChart({ data, height }: { data: CandleData[]; height: number }) {
+/** SVG 캔들차트 + 이동평균선 + 볼린저밴드 */
+function CandleChart({ data, height, overlays = new Set() }: { data: CandleData[]; height: number; overlays?: Set<OverlayKey> }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const width = useChartSize(containerRef);
 
   if (data.length < 3) return <div ref={containerRef} className="w-full" />;
 
-  const ma5 = calcMA(data, 5);
-  const ma10 = calcMA(data, 10);
-  const ma20 = calcMA(data, 20);
+  const ma5 = overlays.has('ma5') ? calcMA(data, 5) : [];
+  const ma20 = overlays.has('ma20') ? calcMA(data, 20) : [];
+  const ma50 = overlays.has('ma50') ? calcMA(data, 50) : [];
+  const bb = overlays.has('bb') ? calcBB(data) : null;
 
   const padding = { top: 8, bottom: 28, left: 4, right: 52 };
   const chartW = width - padding.left - padding.right;
@@ -228,10 +245,19 @@ function CandleChart({ data, height }: { data: CandleData[]; height: number }) {
         );
       })}
 
+      {/* 볼린저밴드 */}
+      {bb && (
+        <>
+          <path d={maLine(bb.upper)} fill="none" stroke="#ec4899" strokeWidth={0.8} strokeDasharray="4,2" opacity={0.6} />
+          <path d={maLine(bb.middle)} fill="none" stroke="#ec4899" strokeWidth={0.8} opacity={0.4} />
+          <path d={maLine(bb.lower)} fill="none" stroke="#ec4899" strokeWidth={0.8} strokeDasharray="4,2" opacity={0.6} />
+        </>
+      )}
+
       {/* 이동평균선 */}
-      <path d={maLine(ma5)} fill="none" stroke="#f59e0b" strokeWidth={1.2} strokeLinejoin="round" opacity={0.9} />
-      <path d={maLine(ma10)} fill="none" stroke="#8b5cf6" strokeWidth={1.2} strokeLinejoin="round" opacity={0.9} />
-      <path d={maLine(ma20)} fill="none" stroke="#06b6d4" strokeWidth={1.2} strokeLinejoin="round" opacity={0.9} />
+      {ma5.length > 0 && <path d={maLine(ma5)} fill="none" stroke="#f59e0b" strokeWidth={1.2} strokeLinejoin="round" opacity={0.9} />}
+      {ma20.length > 0 && <path d={maLine(ma20)} fill="none" stroke="#8b5cf6" strokeWidth={1.2} strokeLinejoin="round" opacity={0.9} />}
+      {ma50.length > 0 && <path d={maLine(ma50)} fill="none" stroke="#06b6d4" strokeWidth={1.2} strokeLinejoin="round" opacity={0.9} />}
 
       {yTickValues.map((v, i) => (
         <text
@@ -259,184 +285,35 @@ function CandleChart({ data, height }: { data: CandleData[]; height: number }) {
         </text>
       ))}
 
-      {/* MA 범례 */}
-      <g transform={`translate(${padding.left + 4}, ${height - padding.bottom - 4})`}>
-        <circle cx={0} cy={-3} r={3} fill="#f59e0b" />
-        <text x={6} y={0} fontSize={8} fill="#a3a3a3">5</text>
-        <circle cx={24} cy={-3} r={3} fill="#8b5cf6" />
-        <text x={30} y={0} fontSize={8} fill="#a3a3a3">10</text>
-        <circle cx={52} cy={-3} r={3} fill="#06b6d4" />
-        <text x={58} y={0} fontSize={8} fill="#a3a3a3">20</text>
-      </g>
+      {/* MA/BB 범례 */}
+      {(ma5.length > 0 || ma20.length > 0 || ma50.length > 0 || bb) && (
+        <g transform={`translate(${padding.left + 4}, ${height - padding.bottom - 4})`}>
+          {(() => {
+            let xOff = 0;
+            const items: { color: string; label: string }[] = [];
+            if (ma5.length > 0) items.push({ color: '#f59e0b', label: 'MA5' });
+            if (ma20.length > 0) items.push({ color: '#8b5cf6', label: 'MA20' });
+            if (ma50.length > 0) items.push({ color: '#06b6d4', label: 'MA50' });
+            if (bb) items.push({ color: '#ec4899', label: 'BB' });
+            return items.map((it, i) => {
+              const x = xOff;
+              xOff += it.label.length * 6 + 16;
+              return (
+                <g key={i}>
+                  <circle cx={x} cy={-3} r={3} fill={it.color} />
+                  <text x={x + 6} y={0} fontSize={8} fill="#a3a3a3">{it.label}</text>
+                </g>
+              );
+            });
+          })()}
+        </g>
+      )}
     </svg>
     </div>
   );
 }
 
-/** 인트라데이 데이터인지 판별 (date가 HHMM 형식) */
-function isIntradayData(data: CandleData[]): boolean {
-  if (data.length === 0) return false;
-  return data[0].date.length <= 6 && /^\d{4,6}$/.test(data[0].date);
-}
 
-/** 인트라데이 X축: 정각(00분) 라벨만 표시, 해당 데이터 인덱스 반환 */
-function getIntradayHourIndices(data: CandleData[]): { idx: number; label: string }[] {
-  const result: { idx: number; label: string }[] = [];
-  for (let i = 0; i < data.length; i++) {
-    const d = data[i].date;
-    const mm = d.slice(2, 4);
-    if (mm === '00') {
-      const hh = d.slice(0, 2);
-      result.push({ idx: i, label: `${hh}:00` });
-    }
-  }
-  return result;
-}
-
-/** SVG 선형 차트 (MA 비표시) */
-function LineChart({ data, height }: { data: CandleData[]; height: number }) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const width = useChartSize(containerRef);
-
-  if (data.length < 2) return <div ref={containerRef} className="w-full" />;
-
-  const padding = { top: 8, bottom: 28, left: 4, right: 52 };
-  const chartW = width - padding.left - padding.right;
-  const chartH = height - padding.top - padding.bottom;
-
-  let allMin = Infinity;
-  let allMax = -Infinity;
-  for (const d of data) {
-    if (d.close < allMin) allMin = d.close;
-    if (d.close > allMax) allMax = d.close;
-  }
-  // 약간의 여유
-  const rangePad = (allMax - allMin) * 0.05 || 1;
-  allMin -= rangePad;
-  allMax += rangePad;
-  const range = allMax - allMin || 1;
-
-  const gap = chartW / (data.length - 1);
-  const toY = (v: number) => padding.top + chartH - ((v - allMin) / range) * chartH;
-  const toX = (i: number) => padding.left + gap * i;
-
-  // 선형 path
-  let linePath = '';
-  let areaPath = '';
-  for (let i = 0; i < data.length; i++) {
-    const x = toX(i);
-    const y = toY(data[i].close);
-    if (i === 0) {
-      linePath = `M${x},${y}`;
-      areaPath = `M${x},${padding.top + chartH} L${x},${y}`;
-    } else {
-      linePath += ` L${x},${y}`;
-      areaPath += ` L${x},${y}`;
-    }
-  }
-  // 영역 닫기
-  areaPath += ` L${toX(data.length - 1)},${padding.top + chartH} Z`;
-
-  // 상승/하락 색상
-  const firstClose = data[0].close;
-  const lastClose = data[data.length - 1].close;
-  const isUp = lastClose >= firstClose;
-  const lineColor = isUp ? '#ef4444' : '#3b82f6';
-  const areaColor = isUp ? 'rgba(239,68,68,0.08)' : 'rgba(59,130,246,0.08)';
-
-  // Y축 눈금
-  const yTicks = 5;
-  const yTickValues: number[] = [];
-  for (let i = 0; i < yTicks; i++) {
-    yTickValues.push(allMin + (range * i) / (yTicks - 1));
-  }
-
-  // X축 라벨: 인트라데이면 정각 시간만, 아니면 등간격
-  const intraday = isIntradayData(data);
-  const hourLabels = intraday ? getIntradayHourIndices(data) : [];
-
-  const xLabelCount = Math.min(6, data.length);
-  const xLabelIndices: number[] = [];
-  if (!intraday) {
-    for (let i = 0; i < xLabelCount; i++) {
-      xLabelIndices.push(Math.round((i * (data.length - 1)) / (xLabelCount - 1)));
-    }
-  }
-
-  return (
-    <div ref={containerRef} className="w-full">
-    <svg width={width} height={height} className="block">
-      {/* Y축 가이드라인 */}
-      {yTickValues.map((v, i) => (
-        <line
-          key={`yg-${i}`}
-          x1={padding.left} y1={toY(v)}
-          x2={padding.left + chartW} y2={toY(v)}
-          stroke="#f0f0f0" strokeWidth={0.8} strokeDasharray="3,3"
-        />
-      ))}
-
-      {/* 인트라데이: 정각 시간에 세로 가이드라인 */}
-      {intraday && hourLabels.map(({ idx }, i) => (
-        <line
-          key={`xg-${i}`}
-          x1={toX(idx)} y1={padding.top}
-          x2={toX(idx)} y2={padding.top + chartH}
-          stroke="#f0f0f0" strokeWidth={0.8} strokeDasharray="3,3"
-        />
-      ))}
-
-      {/* 영역 채우기 */}
-      <path d={areaPath} fill={areaColor} />
-
-      {/* 선 */}
-      <path d={linePath} fill="none" stroke={lineColor} strokeWidth={1.5} strokeLinejoin="round" />
-
-      {/* Y축 가격 */}
-      {yTickValues.map((v, i) => (
-        <text
-          key={`yt-${i}`}
-          x={padding.left + chartW + 6}
-          y={toY(v) + 3}
-          fontSize={9}
-          fill="#a3a3a3"
-          textAnchor="start"
-        >
-          {formatPrice(v)}
-        </text>
-      ))}
-
-      {/* X축: 인트라데이 → 정각 시간 라벨, 기타 → 등간격 날짜 */}
-      {intraday
-        ? hourLabels.map(({ idx, label }, i) => (
-            <text
-              key={`xl-${i}`}
-              x={toX(idx)}
-              y={height - 4}
-              fontSize={9}
-              fill="#a3a3a3"
-              textAnchor="middle"
-            >
-              {label}
-            </text>
-          ))
-        : xLabelIndices.map((idx) => (
-            <text
-              key={`xl-${idx}`}
-              x={toX(idx)}
-              y={height - 4}
-              fontSize={9}
-              fill="#a3a3a3"
-              textAnchor="middle"
-            >
-              {formatDateLabel(data[idx].date)}
-            </text>
-          ))
-      }
-    </svg>
-    </div>
-  );
-}
 
 /** 수급 표시 포맷: 억원 */
 function formatInvestor(v: number): string {
@@ -445,12 +322,13 @@ function formatInvestor(v: number): string {
 }
 
 /** 단일 지수 카드 */
-const defaultPeriod: PeriodKey = '1d';
+const defaultPeriod: PeriodKey = 'daily';
 
 function IndexCard({ data, investor }: { data: IndexData; investor?: InvestorData | null }) {
   const [selectedPeriod, setSelectedPeriod] = useState<PeriodKey>(defaultPeriod);
   const [periodChartData, setPeriodChartData] = useState<IndexData | null>(null);
   const [periodLoading, setPeriodLoading] = useState(false);
+  const [activeOverlays, setActiveOverlays] = useState<Set<OverlayKey>>(new Set(['ma5', 'ma20']));
   const isMounted = useRef(true);
 
   useEffect(() => {
@@ -458,17 +336,24 @@ function IndexCard({ data, investor }: { data: IndexData; investor?: InvestorDat
     return () => { isMounted.current = false; };
   }, []);
 
+  const toggleOverlay = (key: OverlayKey) => {
+    setActiveOverlays(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
+
   const isUp = data.change >= 0;
   const arrow = isUp ? '▲' : '▼';
   const sign = isUp ? '+' : '';
 
   const chartData = data.chart;
-  const { state, ma5, ma10, ma20 } = getMarketState(data.chart);
+  const { state, ma5, ma20, ma50 } = getMarketState(data.chart);
   const sc = stateColor(state);
 
   const displayChart = periodChartData ? periodChartData.chart : chartData;
-  const displayMA = periodChartData ? getMarketState(periodChartData.chart) : { ma5, ma10, ma20 };
-  const showCandle = isCandlePeriod(selectedPeriod);
+  const displayMA = periodChartData ? getMarketState(periodChartData.chart) : { ma5, ma20, ma50 };
 
   const handlePeriodChange = useCallback(async (period: PeriodKey) => {
     setSelectedPeriod(period);
@@ -515,19 +400,15 @@ function IndexCard({ data, investor }: { data: IndexData; investor?: InvestorDat
 
       {/* 차트 */}
       <div className="px-2">
-        {showCandle ? (
-          <CandleChart data={displayChart} height={220} />
-        ) : (
-          <LineChart data={displayChart} height={220} />
-        )}
+        <CandleChart data={displayChart} height={220} overlays={activeOverlays} />
       </div>
 
       {/* 기간 선택 + 수급 */}
       <div className="border-t border-gray-100">
         <div className="px-5 py-3">
-          {/* 캔들스틱 그룹 + 선형 그룹 */}
+          {/* 기간 선택 + 오버레이 토글 */}
           <div className="flex items-center gap-1 flex-wrap">
-            {PERIOD_LABELS.filter(p => CANDLE_PERIODS.includes(p.key)).map(({ key, label }) => (
+            {PERIOD_LABELS.map(({ key, label }) => (
               <button
                 key={key}
                 onClick={() => handlePeriodChange(key)}
@@ -541,15 +422,16 @@ function IndexCard({ data, investor }: { data: IndexData; investor?: InvestorDat
               </button>
             ))}
             <span className="w-px h-4 bg-gray-200 mx-1" />
-            {PERIOD_LABELS.filter(p => LINE_PERIODS.includes(p.key)).map(({ key, label }) => (
+            {OVERLAY_LABELS.map(({ key, label, color }) => (
               <button
                 key={key}
-                onClick={() => handlePeriodChange(key)}
-                className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${
-                  selectedPeriod === key
-                    ? 'bg-gray-900 text-white'
-                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                onClick={() => toggleOverlay(key)}
+                className={`px-2.5 py-1 text-xs font-medium rounded-full transition-colors border ${
+                  activeOverlays.has(key)
+                    ? 'text-white border-transparent'
+                    : 'bg-white text-gray-400 border-gray-200 hover:border-gray-300'
                 }`}
+                style={activeOverlays.has(key) ? { backgroundColor: color } : {}}
               >
                 {label}
               </button>
@@ -581,21 +463,27 @@ function IndexCard({ data, investor }: { data: IndexData; investor?: InvestorDat
           )}
         </div>
 
-        {/* MA 정보: 캔들스틱 차트에만 표시 */}
-        {showCandle && (
+        {/* MA 수치 표시 */}
+        {(activeOverlays.has('ma5') || activeOverlays.has('ma20') || activeOverlays.has('ma50')) && (
           <div className="px-5 py-3 border-t border-gray-50 flex items-center gap-4 text-xs text-gray-500">
-            <span className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />
-              MA5: {displayMA.ma5.toFixed(1)}
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-violet-500 inline-block" />
-              MA10: {displayMA.ma10.toFixed(1)}
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-cyan-500 inline-block" />
-              MA20: {displayMA.ma20.toFixed(1)}
-            </span>
+            {activeOverlays.has('ma5') && displayMA.ma5 > 0 && (
+              <span className="flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />
+                MA5: {displayMA.ma5.toFixed(1)}
+              </span>
+            )}
+            {activeOverlays.has('ma20') && displayMA.ma20 > 0 && (
+              <span className="flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-violet-500 inline-block" />
+                MA20: {displayMA.ma20.toFixed(1)}
+              </span>
+            )}
+            {activeOverlays.has('ma50') && displayMA.ma50 > 0 && (
+              <span className="flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-cyan-500 inline-block" />
+                MA50: {displayMA.ma50.toFixed(1)}
+              </span>
+            )}
           </div>
         )}
       </div>
@@ -610,7 +498,7 @@ export default function MarketIndex() {
 
   const fetchData = useCallback(async () => {
     try {
-      const res = await fetch('/api/market?period=1d');
+      const res = await fetch('/api/market?period=daily');
       if (!res.ok) {
         if (isMounted.current && !data) setError(true);
         return;
