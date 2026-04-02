@@ -254,7 +254,7 @@ export async function getNearHighLow(type: 'high' | 'low' = 'high', marketCode: 
   const headers = await makeHeaders('FHPST01760000');
   const params = new URLSearchParams({
     FID_COND_MRKT_DIV_CODE: marketCode,
-    FID_COND_SCR_DIV_CODE: '21301',
+    FID_COND_SCR_DIV_CODE: '20176',
     FID_INPUT_ISCD: '0000',
     FID_RANK_SORT_CLS_CODE: type === 'high' ? '0' : '1',
     FID_INPUT_CNT_1: '0',
