@@ -176,7 +176,7 @@ function useChartSize(containerRef: React.RefObject<HTMLDivElement | null>) {
 }
 
 /** SVG 캔들차트 + 이동평균선 + 볼린저밴드 */
-const DISPLAY_CANDLES = 60; // 차트에 보여줄 캔들 수
+const DISPLAY_CANDLES = 45; // 차트에 보여줄 캔들 수 (최근 ~2개월)
 
 function CandleChart({ data, height, overlays = new Set(), yAxisMin }: { data: CandleData[]; height: number; overlays?: Set<OverlayKey>; yAxisMin?: number }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -570,7 +570,7 @@ export default function MarketIndex({ aside }: { aside?: React.ReactNode } = {})
   useEffect(() => {
     isMounted.current = true;
     fetchData();
-    const interval = setInterval(fetchData, 5 * 60 * 1000);
+    const interval = setInterval(fetchData, 60 * 1000); // 1분 갱신
     return () => {
       isMounted.current = false;
       clearInterval(interval);

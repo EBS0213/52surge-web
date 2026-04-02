@@ -15,7 +15,7 @@ const APP_SECRET = process.env.KIS_APP_SECRET || '';
 
 // 캐시 - 기간별 캐시
 const cacheMap = new Map<string, { data: unknown; fetchedAt: number }>();
-const CACHE_TTL = 5 * 60 * 1000; // 5분
+const CACHE_TTL = 1 * 60 * 1000; // 1분 (장중 빠른 갱신)
 const CACHE_FILE = join(process.cwd(), '.cache-market.json');
 
 // 파일 캐시에서 복원 (PM2 재시작 시 즉시 응답)
