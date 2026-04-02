@@ -578,32 +578,40 @@ export default function MarketIndex({ aside }: { aside?: React.ReactNode } = {})
   }, [fetchData]);
 
   if (!data && !error) {
+    const skeleton = (
+      <div className="bg-white rounded-2xl p-6 border border-gray-100 animate-pulse">
+        <div className="h-4 w-20 bg-gray-200 rounded mb-2" />
+        <div className="h-8 w-36 bg-gray-200 rounded mb-3" />
+        <div className="h-40 bg-gray-100 rounded" />
+      </div>
+    );
     return (
       <section className="pt-4 pb-2 px-6">
-        <div className={`max-w-7xl mx-auto grid gap-4 ${aside ? 'grid-cols-1 md:grid-cols-[1fr_1fr_160px]' : 'grid-cols-1 md:grid-cols-2'}`}>
-          {[0, 1].map((i) => (
-            <div key={i} className="bg-white rounded-2xl p-6 border border-gray-100 animate-pulse">
-              <div className="h-4 w-20 bg-gray-200 rounded mb-2" />
-              <div className="h-8 w-36 bg-gray-200 rounded mb-3" />
-              <div className="h-40 bg-gray-100 rounded" />
-            </div>
-          ))}
-          {aside}
+        <div className="max-w-7xl mx-auto flex flex-col gap-4">
+          {skeleton}
+          <div className={`grid gap-4 ${aside ? 'grid-cols-1 md:grid-cols-[1fr_160px]' : ''}`}>
+            {skeleton}
+            {aside}
+          </div>
         </div>
       </section>
     );
   }
 
   if (error || !data) {
+    const errBox = (
+      <div className="bg-white rounded-2xl p-6 border border-gray-100 text-center">
+        <p className="text-sm text-gray-400">지수 데이터를 불러오지 못했습니다</p>
+      </div>
+    );
     return (
       <section className="pt-4 pb-2 px-6">
-        <div className={`max-w-7xl mx-auto grid gap-4 ${aside ? 'grid-cols-1 md:grid-cols-[1fr_1fr_160px]' : 'grid-cols-1 md:grid-cols-2'}`}>
-          {[0, 1].map((i) => (
-            <div key={i} className="bg-white rounded-2xl p-6 border border-gray-100 text-center">
-              <p className="text-sm text-gray-400">지수 데이터를 불러오지 못했습니다</p>
-            </div>
-          ))}
-          {aside}
+        <div className="max-w-7xl mx-auto flex flex-col gap-4">
+          {errBox}
+          <div className={`grid gap-4 ${aside ? 'grid-cols-1 md:grid-cols-[1fr_160px]' : ''}`}>
+            {errBox}
+            {aside}
+          </div>
         </div>
       </section>
     );
@@ -611,11 +619,22 @@ export default function MarketIndex({ aside }: { aside?: React.ReactNode } = {})
 
   return (
     <section className="pt-4 pb-2 px-6">
-      <div className={`max-w-7xl mx-auto grid gap-4 ${aside ? 'grid-cols-1 md:grid-cols-[1fr_1fr_160px]' : 'grid-cols-1 md:grid-cols-2'}`}>
-        <IndexCard data={data.kospi} investor={data.kospi.investor} />
-        <IndexCard data={data.kosdaq} investor={data.kosdaq.investor} />
-        {aside}
-      </div>
+      {aside ? (
+        <div className="max-w-7xl mx-auto flex flex-col gap-4">
+          {/* KOSPI — 풀 너비 */}
+          <IndexCard data={data.kospi} investor={data.kospi.investor} />
+          {/* KOSDAQ + 사이드바 나란히 */}
+          <div className="grid grid-cols-1 md:grid-cols-[1fr_160px] gap-4">
+            <IndexCard data={data.kosdaq} investor={data.kosdaq.investor} />
+            {aside}
+          </div>
+        </div>
+      ) : (
+        <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-4">
+          <IndexCard data={data.kospi} investor={data.kospi.investor} />
+          <IndexCard data={data.kosdaq} investor={data.kosdaq.investor} />
+        </div>
+      )}
     </section>
   );
 }
