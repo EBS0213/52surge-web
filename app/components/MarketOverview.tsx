@@ -85,7 +85,7 @@ export default function MarketOverview({ data }: MarketOverviewProps) {
 
       {/* 환율 */}
       <div className="bg-white rounded-xl p-3 border border-gray-100 flex-1">
-        <div className="text-[10px] text-gray-400 mb-1.5">환율</div>
+        <div className="text-xs font-semibold text-gray-600 mb-1.5">환율</div>
         {global?.exchange && global.exchange.length > 0 ? (
           <div className="space-y-1">
             {global.exchange.slice(0, 4).map((item, i) => (
@@ -109,7 +109,7 @@ export default function MarketOverview({ data }: MarketOverviewProps) {
 
       {/* 원자재 */}
       <div className="bg-white rounded-xl p-3 border border-gray-100 flex-1">
-        <div className="text-[10px] text-gray-400 mb-1.5">원자재</div>
+        <div className="text-xs font-semibold text-gray-600 mb-1.5">원자재</div>
         {global?.commodity && global.commodity.length > 0 ? (
           <div className="space-y-1">
             {global.commodity.map((item, i) => (
