@@ -13,6 +13,7 @@ interface MarketItem {
   change: string;
   changeRate: string;
   isUp: boolean;
+  unit: string;
 }
 
 interface GlobalData {
@@ -27,13 +28,16 @@ const CACHE_TTL = 5 * 60 * 1000;
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36';
 
 /** 메인 페이지에서 특정 head 클래스 블록의 value/change 추출 */
-function parseHeadBlock(html: string, headClass: string, label: string): MarketItem | null {
+function parseHeadBlock(html: string, headClass: string, label: string, unit: string): MarketItem | null {
   const regex = new RegExp(`class="${headClass}"[\\s\\S]*?<\\/a>`);
   const block = html.match(regex);
   if (!block) return null;
 
   const value = block[0].match(/class="value"[^>]*>([\d,.]+)/);
-  const change = block[0].match(/class="change"[^>]*>([\d,.]+)/);
+  // change가 nested tag 안에 있을 수 있으므로 유연하게 매칭
+  const change = block[0].match(/class="change"[^>]*>(?:<[^>]*>)*([\d,.]+)/);
+  // changeRate (등락률) 추출
+  const changeRate = block[0].match(/class="change_rate"[^>]*>(?:<[^>]*>)*([\d,.]+%?)/);
   const isUp = block[0].includes('point_up');
 
   if (value) {
@@ -41,8 +45,9 @@ function parseHeadBlock(html: string, headClass: string, label: string): MarketI
       name: label,
       price: value[1].trim(),
       change: change ? change[1].trim() : '',
-      changeRate: '',
+      changeRate: changeRate ? changeRate[1].trim() : '',
       isUp,
+      unit,
     };
   }
   return null;
@@ -50,18 +55,18 @@ function parseHeadBlock(html: string, headClass: string, label: string): MarketI
 
 // 메인 페이지에서 파싱할 환율 목록
 const EXCHANGE_HEADS = [
-  { cls: 'head usd', name: 'USD/KRW' },
-  { cls: 'head jpy', name: 'JPY/KRW' },
-  { cls: 'head eur', name: 'EUR/KRW' },
-  { cls: 'head cny', name: 'CNY/KRW' },
+  { cls: 'head usd', name: 'USD/KRW', unit: '원' },
+  { cls: 'head jpy', name: 'JPY/KRW', unit: '원/100엔' },
+  { cls: 'head eur', name: 'EUR/KRW', unit: '원' },
+  { cls: 'head cny', name: 'CNY/KRW', unit: '원' },
 ];
 
 // 메인 페이지에서 파싱할 원자재 (모두 메인 페이지에서 제공)
 const COMMODITY_HEADS = [
-  { cls: 'head gold_inter', name: '국제금' },
-  { cls: 'head gold_domestic', name: '국내금' },
-  { cls: 'head wti', name: 'WTI' },
-  { cls: 'head gasoline', name: '휘발유' },
+  { cls: 'head gold_inter', name: '국제금', unit: '$/oz' },
+  { cls: 'head gold_domestic', name: '국내금', unit: '원/g' },
+  { cls: 'head wti', name: 'WTI', unit: '$/bbl' },
+  { cls: 'head gasoline', name: '휘발유', unit: '원/L' },
 ];
 
 async function fetchGlobalData(): Promise<GlobalData> {
@@ -78,13 +83,13 @@ async function fetchGlobalData(): Promise<GlobalData> {
 
       // 환율
       for (const h of EXCHANGE_HEADS) {
-        const item = parseHeadBlock(html, h.cls, h.name);
+        const item = parseHeadBlock(html, h.cls, h.name, h.unit);
         if (item) exchange.push(item);
       }
 
       // 원자재
       for (const h of COMMODITY_HEADS) {
-        const item = parseHeadBlock(html, h.cls, h.name);
+        const item = parseHeadBlock(html, h.cls, h.name, h.unit);
         if (item) commodity.push(item);
       }
     }
@@ -95,13 +100,13 @@ async function fetchGlobalData(): Promise<GlobalData> {
   // fallback
   if (exchange.length === 0) {
     for (const h of EXCHANGE_HEADS) {
-      exchange.push({ name: h.name, price: '-', change: '', changeRate: '', isUp: false });
+      exchange.push({ name: h.name, price: '-', change: '', changeRate: '', isUp: false, unit: h.unit });
     }
   }
 
   if (commodity.length === 0) {
     for (const h of COMMODITY_HEADS) {
-      commodity.push({ name: h.name, price: '-', change: '', changeRate: '', isUp: false });
+      commodity.push({ name: h.name, price: '-', change: '', changeRate: '', isUp: false, unit: h.unit });
     }
   }
 
