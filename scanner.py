@@ -146,12 +146,12 @@ def scan_52week_highs(
 ) -> Dict:
     """
     52주 신고가 스캔 - 최적화 버전
-    시가총액 상위 2000개 + 병렬 처리
+    KRX 전 종목 + 병렬 처리
     """
     try:
         print("="*60)
         print("52주 신고가 스캔 - 최적화 버전")
-        print("시가총액 상위 2000개 종목 + 병렬 처리")
+        print("KRX 전 종목 + 병렬 처리")
         print("="*60)
 
         # 최근 거래일
@@ -175,10 +175,10 @@ def scan_52week_highs(
         elif 'Market Cap' in stock_list.columns:
             stock_list = stock_list.sort_values('Market Cap', ascending=False)
 
-        # 상위 2000개
-        top_stocks = stock_list.head(2000)
+        # 전 종목 스캔
+        top_stocks = stock_list
 
-        print(f"✅ 시가총액 상위 {len(top_stocks)}개 종목 선정")
+        print(f"✅ KRX 전 종목 {len(top_stocks)}개 대상 스캔")
 
         # 병렬 처리용 인자 준비
         scan_args = []
