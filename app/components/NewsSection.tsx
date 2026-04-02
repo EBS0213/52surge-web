@@ -244,8 +244,7 @@ export default function NewsSection() {
   );
 
   const items = filteredNews;
-  const totalPages = Math.max(1, Math.ceil(items.length / ITEMS_PER_PAGE));
-  const currentItems = items.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
+  const currentItems = items;
 
   // 필터 변경 시 페이지 리셋
   const handleFilterChange = (key: string) => {
@@ -254,17 +253,7 @@ export default function NewsSection() {
     setSlideDir(null);
   };
 
-  // 페이지 전환 (슬라이드 애니메이션)
-  const goToPage = (newPage: number) => {
-    if (newPage === page || newPage < 1 || newPage > totalPages) return;
-    setSlideDir(newPage > page ? 'left' : 'right');
-    setTimeout(() => {
-      setPage(newPage);
-      setSlideDir(null);
-      // 뉴스 섹션 상단으로 스크롤
-      gridRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }, 200);
-  };
+  // (pagination removed — all items shown in scrollable container)
 
   // 로딩 스켈레톤
   if (loading) {
@@ -310,17 +299,10 @@ export default function NewsSection() {
 
       {/* 뉴스 카드 리스트 */}
       {currentItems.length > 0 ? (
-        <div className="max-h-[480px] overflow-y-auto">
-          <div
-            ref={gridRef}
-            className={`space-y-3 transition-all duration-200 ${
-              slideDir === 'left' ? 'opacity-0 translate-x-8' :
-              slideDir === 'right' ? 'opacity-0 -translate-x-8' :
-              'opacity-100 translate-x-0'
-            }`}
-          >
+        <div className="max-h-[600px] overflow-y-auto" ref={gridRef}>
+          <div className="space-y-3">
             {currentItems.map((item, i) => (
-              <NewsCard key={`${sourceFilter}-${page}-${item.title}-${i}`} item={item} index={i} />
+              <NewsCard key={`${sourceFilter}-${item.title}-${i}`} item={item} index={i} />
             ))}
           </div>
         </div>
@@ -331,52 +313,6 @@ export default function NewsSection() {
               ? `${SOURCE_FILTERS.find(f => f.key === sourceFilter)?.label || ''} 뉴스가 없습니다.`
               : '뉴스를 불러올 수 없습니다.'}
           </p>
-        </div>
-      )}
-
-        {/* 페이지네이션 */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-center gap-2 mt-8">
-            {/* 이전 버튼 */}
-            <button
-              onClick={() => goToPage(page - 1)}
-              disabled={page === 1}
-              className={`w-9 h-9 rounded-full flex items-center justify-center text-[13px] transition-all ${
-                page === 1
-                  ? 'text-gray-300 cursor-not-allowed'
-                  : 'text-[#86868b] hover:bg-gray-100 hover:text-[#1d1d1f]'
-              }`}
-            >
-              ‹
-            </button>
-
-            {/* 페이지 번호 */}
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map((num) => (
-              <button
-                key={num}
-                onClick={() => goToPage(num)}
-                className={`w-9 h-9 rounded-full flex items-center justify-center text-[13px] font-medium transition-all ${
-                  page === num
-                    ? 'bg-[#1d1d1f] text-white'
-                    : 'text-[#86868b] hover:bg-gray-100 hover:text-[#1d1d1f]'
-                }`}
-              >
-                {num}
-              </button>
-            ))}
-
-            {/* 다음 버튼 */}
-            <button
-              onClick={() => goToPage(page + 1)}
-              disabled={page === totalPages}
-              className={`w-9 h-9 rounded-full flex items-center justify-center text-[13px] transition-all ${
-                page === totalPages
-                  ? 'text-gray-300 cursor-not-allowed'
-                  : 'text-[#86868b] hover:bg-gray-100 hover:text-[#1d1d1f]'
-              }`}
-            >
-              ›
-            </button>
         </div>
       )}
     </div>
