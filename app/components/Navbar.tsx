@@ -25,7 +25,7 @@ export default function Navbar({ lastUpdated, onRefresh }: NavbarProps) {
           OURTLE
         </Link>
 
-        <div className="flex items-center gap-14 ml-8">
+        <div className="flex items-center gap-14 ml-14">
           {navItems.map(({ href, label }) => (
             <Link
               key={href}
