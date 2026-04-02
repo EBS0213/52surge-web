@@ -34,8 +34,8 @@ function parseHeadBlock(html: string, headClass: string, label: string, unit: st
   if (!block) return null;
 
   const value = block[0].match(/class="value"[^>]*>([\d,.]+)/);
-  // change가 nested tag 안에 있을 수 있으므로 유연하게 매칭
-  const change = block[0].match(/class="change"[^>]*>(?:<[^>]*>)*([\d,.]+)/);
+  // change 값 앞에 공백이 있을 수 있음 (하락 시 " 5.21" 형태)
+  const change = block[0].match(/class="change"[^>]*>(?:<[^>]*>)*\s*([\d,.]+)/);
   // changeRate (등락률) 추출
   const changeRate = block[0].match(/class="change_rate"[^>]*>(?:<[^>]*>)*([\d,.]+%?)/);
   const isUp = block[0].includes('point_up');
