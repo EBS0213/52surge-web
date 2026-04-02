@@ -19,13 +19,13 @@ export default function Navbar({ lastUpdated, onRefresh }: NavbarProps) {
 
   return (
     <nav className="fixed top-0 w-full bg-[#1d1d1f]/95 backdrop-blur-xl z-50">
-      <div className="max-w-[980px] mx-auto px-6 h-11 flex items-center">
+      <div className="max-w-7xl mx-auto px-6 h-11 flex items-center">
         {/* 왼쪽: 로고 + 메뉴 */}
         <Link href="/" className="text-white text-xl font-semibold tracking-tight">
           OURTLE
         </Link>
 
-        <div className="flex items-center gap-7 ml-8">
+        <div className="flex items-center gap-10 ml-8">
           {navItems.map(({ href, label }) => (
             <Link
               key={href}
