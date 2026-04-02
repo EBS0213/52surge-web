@@ -61,7 +61,7 @@ async function fetchWorldQuote(code: string, label: string): Promise<MarketItem 
     const html = await res.text();
 
     // 테이블 첫 행의 num 클래스에서 가격 (값이 다음 줄에 있을 수 있음)
-    const numMatch = html.match(/<td[^>]*class="num"[^>]*>\s*([\d,.]+)/s);
+    const numMatch = html.match(/<td[^>]*class="num"[^>]*>\s*([\d,.]+)/);
     if (numMatch) {
       return { name: label, price: numMatch[1].trim(), change: '', changeRate: '', isUp: false };
     }
@@ -79,7 +79,7 @@ async function fetchGoldPrice(): Promise<MarketItem | null> {
     if (!res.ok) return null;
     const html = await res.text();
 
-    const numMatch = html.match(/<td[^>]*class="num"[^>]*>\s*([\d,.]+)/s);
+    const numMatch = html.match(/<td[^>]*class="num"[^>]*>\s*([\d,.]+)/);
     if (numMatch) {
       return { name: '금', price: numMatch[1].trim(), change: '', changeRate: '', isUp: false };
     }
