@@ -27,6 +27,7 @@ interface FilterState {
   rsiMax: number;
   volumeChangeMin: number;  // 거래량 변화율 최소 (%)
   tradingValueMin: number;  // 거래대금 최소 (억)
+  volumeMin: number;        // 거래량 최소 (만주)
 }
 
 const DEFAULT_FILTERS: FilterState = {
@@ -34,6 +35,7 @@ const DEFAULT_FILTERS: FilterState = {
   rsiMax: 100,
   volumeChangeMin: 0,
   tradingValueMin: 0,
+  volumeMin: 0,
 };
 
 /** 필터 패널 — Enter키 또는 적용 버튼으로 필터 적용 */
@@ -62,7 +64,8 @@ function FilterPanel({
     filters.rsiMin === 0 &&
     filters.rsiMax === 100 &&
     filters.volumeChangeMin === 0 &&
-    filters.tradingValueMin === 0;
+    filters.tradingValueMin === 0 &&
+    filters.volumeMin === 0;
 
   const handleApply = () => {
     onApply(draft);
@@ -95,7 +98,7 @@ function FilterPanel({
         )}
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <div>
           <label className="block text-xs text-gray-500 mb-1">RSI 최소</label>
           <input
@@ -116,6 +119,17 @@ function FilterPanel({
             value={draft.rsiMax === 100 ? '' : draft.rsiMax}
             onChange={(e) => setDraft({ ...draft, rsiMax: Number(e.target.value) || 100 })}
             placeholder="100"
+          />
+        </div>
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">거래량 (만주 이상)</label>
+          <input
+            className={inputClass}
+            type="text"
+            inputMode="numeric"
+            value={draft.volumeMin || ''}
+            onChange={(e) => setDraft({ ...draft, volumeMin: Number(e.target.value) || 0 })}
+            placeholder="0"
           />
         </div>
         <div>
@@ -192,11 +206,13 @@ export default function StockGrid({
   const stocks = useMemo(() => {
     return data.stocks.filter((s) => {
       const rsi = s.rsi ?? 0;
+      const vol = (s.volume ?? 0) / 10_000;  // 만주 단위
       const volChange = s.volume_change_pct ?? 0;
       const tradingVal = (s.trading_value ?? 0) / 100_000_000;
 
       if (filters.rsiMin > 0 && rsi < filters.rsiMin) return false;
       if (filters.rsiMax < 100 && rsi > filters.rsiMax) return false;
+      if (filters.volumeMin > 0 && vol < filters.volumeMin) return false;
       if (filters.volumeChangeMin > 0 && volChange < filters.volumeChangeMin) return false;
       if (filters.tradingValueMin > 0 && tradingVal < filters.tradingValueMin) return false;
       return true;
@@ -206,6 +222,7 @@ export default function StockGrid({
   const isFiltered =
     filters.rsiMin !== 0 ||
     filters.rsiMax !== 100 ||
+    filters.volumeMin !== 0 ||
     filters.volumeChangeMin !== 0 ||
     filters.tradingValueMin !== 0;
 
@@ -289,65 +306,50 @@ export default function StockGrid({
     <section className="pt-6 pb-4 px-6">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="flex items-baseline justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <div>
-              <h2 className="text-2xl font-bold">워치리스트</h2>
-              <p className="text-gray-500 mt-1">
-                {isFiltered ? (
-                  <span>{stocks.length}개 <span className="text-gray-400">/ {data.total_found}개</span></span>
-                ) : (
-                  <span>총 {data.total_found}개</span>
-                )}
-                {totalPages > 1 && (
-                  <span className="ml-2 text-gray-400">
-                    ({currentPage + 1} / {totalPages} 페이지)
-                  </span>
-                )}
-                {isRealtimeAvailable && (
-                  <span className="ml-2 text-green-500 text-xs">
-                    실시간 시세 연동 중
-                  </span>
-                )}
-              </p>
-            </div>
-
-            {/* 필터 토글 */}
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <h2 className="text-2xl font-bold">워치리스트</h2>
+            {/* 필터 토글 — 타이틀 바로 옆 */}
             <button
               onClick={() => setShowFilter(!showFilter)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${
+              className={`px-2.5 py-1 text-xs font-medium rounded-full transition-colors ${
                 showFilter || isFiltered
                   ? 'bg-gray-900 text-white'
                   : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
               }`}
             >
-              <svg className="w-3.5 h-3.5 inline-block mr-1 -mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <svg className="w-3 h-3 inline-block mr-0.5 -mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
               </svg>
               필터{isFiltered ? ' ON' : ''}
             </button>
+            <span className="text-xs text-gray-400">
+              {isFiltered ? `${stocks.length}/${data.total_found}` : `${data.total_found}개`}
+              {isRealtimeAvailable && <span className="ml-1 text-green-500">LIVE</span>}
+            </span>
           </div>
 
-          {/* Navigation arrows */}
+          {/* Navigation arrows + 페이지 표시 */}
           {totalPages > 1 && (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-gray-400 mr-1">{currentPage + 1}/{totalPages}</span>
               <button
                 onClick={goPrev}
                 disabled={currentPage === 0}
-                className="w-10 h-10 rounded-full border border-gray-200 flex items-center justify-center hover:bg-gray-50 hover:border-gray-300 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                className="w-8 h-8 rounded-full border border-gray-200 flex items-center justify-center hover:bg-gray-50 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
                 aria-label="이전"
               >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="15 18 9 12 15 6" />
                 </svg>
               </button>
               <button
                 onClick={goNext}
                 disabled={currentPage === totalPages - 1}
-                className="w-10 h-10 rounded-full border border-gray-200 flex items-center justify-center hover:bg-gray-50 hover:border-gray-300 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                className="w-8 h-8 rounded-full border border-gray-200 flex items-center justify-center hover:bg-gray-50 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
                 aria-label="다음"
               >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="9 18 15 12 9 6" />
                 </svg>
               </button>
