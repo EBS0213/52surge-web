@@ -64,9 +64,9 @@ const EXCHANGE_HEADS = [
 // 메인 페이지에서 파싱할 원자재 (모두 메인 페이지에서 제공)
 const COMMODITY_HEADS = [
   { cls: 'head gold_inter', name: '국제금', unit: '$/oz' },
-  { cls: 'head gold_domestic', name: '국내금', unit: '원/g' },
+  { cls: 'head silver', name: '은', unit: '$/oz' },
   { cls: 'head wti', name: 'WTI', unit: '$/bbl' },
-  { cls: 'head gasoline', name: '휘발유', unit: '원/L' },
+  { cls: 'head copper', name: '구리', unit: '$/lb' },
 ];
 
 async function fetchGlobalData(): Promise<GlobalData> {
