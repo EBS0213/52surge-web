@@ -156,6 +156,13 @@ function FilterPanel({
         </div>
       </div>
 
+      {/* 기본 선별 조건 안내 */}
+      <div className="mt-3 pt-3 border-t border-gray-100">
+        <p className="text-[10px] text-gray-400 leading-relaxed">
+          기본 선별: 시가총액 상위 2,000종목 중 52주 신고가 돌파 + 거래량 100만주↑ + 거래대금 50억↑ + RSI 60↑ 충족 종목
+        </p>
+      </div>
+
       {/* 적용 버튼 */}
       <div className="mt-3 flex justify-end">
         <button
