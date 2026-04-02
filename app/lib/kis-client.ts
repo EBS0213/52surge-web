@@ -153,7 +153,7 @@ export async function getVolumeRank(marketCode: string = 'J') {
   const headers = await makeHeaders('FHPST01710000');
   const params = new URLSearchParams({
     FID_COND_MRKT_DIV_CODE: marketCode,
-    FID_COND_SCR_DIV_CODE: '20101',
+    FID_COND_SCR_DIV_CODE: '20171',
     FID_INPUT_ISCD: '0000',
     FID_DIV_CLS_CODE: '0',
     FID_BLNG_CLS_CODE: '0',
