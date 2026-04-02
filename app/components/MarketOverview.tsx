@@ -91,12 +91,10 @@ export default function MarketOverview({ data }: MarketOverviewProps) {
           <div className="space-y-1">
             {global.exchange.slice(0, 4).map((item, i) => (
               <div key={i} className="flex items-center justify-between">
-                <div className="flex flex-col">
-                  <span className="text-[10px] text-gray-500 truncate">{item.name}</span>
-                  {item.unit && <span className="text-[8px] text-gray-300">{item.unit}</span>}
-                </div>
+                <span className="text-[10px] text-gray-500 truncate">{item.name}</span>
                 <div className="flex items-center gap-1">
                   <span className="text-[11px] font-semibold text-gray-900">{item.price}</span>
+                  {item.unit && <span className="text-[8px] text-gray-300">{item.unit}</span>}
                   {item.change ? (
                     <span className={`text-[9px] ${item.isUp ? 'text-red-500' : 'text-blue-500'}`}>
                       {item.isUp ? '▲' : '▼'}{item.change}
@@ -120,12 +118,10 @@ export default function MarketOverview({ data }: MarketOverviewProps) {
           <div className="space-y-1">
             {global.commodity.map((item, i) => (
               <div key={i} className="flex items-center justify-between">
-                <div className="flex flex-col">
-                  <span className="text-[10px] text-gray-500 truncate">{item.name}</span>
-                  {item.unit && <span className="text-[8px] text-gray-300">{item.unit}</span>}
-                </div>
+                <span className="text-[10px] text-gray-500 truncate">{item.name}</span>
                 <div className="flex items-center gap-1">
                   <span className="text-[11px] font-semibold text-gray-900">{item.price}</span>
+                  {item.unit && <span className="text-[8px] text-gray-300">{item.unit}</span>}
                   {item.change ? (
                     <span className={`text-[9px] ${item.isUp ? 'text-red-500' : 'text-blue-500'}`}>
                       {item.isUp ? '▲' : '▼'}{item.change}
