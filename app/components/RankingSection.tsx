@@ -112,7 +112,7 @@ export default function RankingSection({ onStockClick }: { onStockClick?: (stock
 
       {!loading && data && data.items.length > 0 && (
         <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-          <div className="max-h-[480px] overflow-y-auto">
+          <div className="max-h-[600px] overflow-y-auto">
             <table className="w-full text-xs">
               <thead className="sticky top-0 bg-white z-10">
                 <tr className="border-b border-gray-100 text-[10px] text-gray-400">
