@@ -17,7 +17,7 @@ interface MarketItem {
 
 interface GlobalData {
   exchange: MarketItem[];
-  oil: MarketItem[];
+  commodity: MarketItem[];
 }
 
 function getRSIColor(rsi: number | null): string {
@@ -88,7 +88,7 @@ export default function MarketOverview({ data }: MarketOverviewProps) {
         <div className="text-[10px] text-gray-400 mb-1.5">환율</div>
         {global?.exchange && global.exchange.length > 0 ? (
           <div className="space-y-1">
-            {global.exchange.slice(0, 3).map((item, i) => (
+            {global.exchange.slice(0, 4).map((item, i) => (
               <div key={i} className="flex items-center justify-between">
                 <span className="text-[10px] text-gray-500 truncate">{item.name}</span>
                 <div className="flex items-center gap-1">
@@ -107,12 +107,12 @@ export default function MarketOverview({ data }: MarketOverviewProps) {
         )}
       </div>
 
-      {/* 유가 */}
+      {/* 원자재 */}
       <div className="bg-white rounded-xl p-3 border border-gray-100 flex-1">
-        <div className="text-[10px] text-gray-400 mb-1.5">유가</div>
-        {global?.oil && global.oil.length > 0 ? (
+        <div className="text-[10px] text-gray-400 mb-1.5">원자재</div>
+        {global?.commodity && global.commodity.length > 0 ? (
           <div className="space-y-1">
-            {global.oil.slice(0, 3).map((item, i) => (
+            {global.commodity.map((item, i) => (
               <div key={i} className="flex items-center justify-between">
                 <span className="text-[10px] text-gray-500 truncate">{item.name}</span>
                 <div className="flex items-center gap-1">
