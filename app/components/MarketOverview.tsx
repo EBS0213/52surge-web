@@ -56,45 +56,45 @@ export default function MarketOverview({ data }: MarketOverviewProps) {
   }, [fetchGlobal]);
 
   return (
-    <div className="flex flex-col gap-2 min-w-0">
+    <div className="flex flex-col gap-1 min-w-0">
       {/* 거래일 */}
-      <div className="bg-white rounded-xl p-3 border border-gray-100">
-        <div className="text-[10px] text-gray-400 mb-0.5">거래일</div>
-        <div className="text-sm font-semibold text-gray-900">{data.trading_date}</div>
+      <div className="bg-white rounded-lg px-2.5 py-1.5 border border-gray-100">
+        <div className="text-[9px] text-gray-400 leading-none">거래일</div>
+        <div className="text-xs font-semibold text-gray-900 mt-0.5">{data.trading_date}</div>
       </div>
 
       {/* RSI */}
-      <div className="bg-white rounded-xl p-3 border border-gray-100">
+      <div className="bg-white rounded-lg px-2.5 py-1.5 border border-gray-100">
         <div className="flex items-center justify-between">
           <div>
-            <div className="text-[10px] text-gray-400">코스피 RSI</div>
-            <div className={`text-sm font-semibold ${getRSIColor(data.market_rsi.kospi)}`}>
+            <div className="text-[9px] text-gray-400 leading-none">코스피 RSI</div>
+            <div className={`text-xs font-semibold mt-0.5 ${getRSIColor(data.market_rsi.kospi)}`}>
               {data.market_rsi.kospi?.toFixed(1) || 'N/A'}
-              <span className="text-[10px] text-gray-400 ml-1">{getRSILabel(data.market_rsi.kospi)}</span>
+              <span className="text-[9px] text-gray-400 ml-0.5">{getRSILabel(data.market_rsi.kospi)}</span>
             </div>
           </div>
           <div className="text-right">
-            <div className="text-[10px] text-gray-400">코스닥 RSI</div>
-            <div className={`text-sm font-semibold ${getRSIColor(data.market_rsi.kosdaq)}`}>
+            <div className="text-[9px] text-gray-400 leading-none">코스닥 RSI</div>
+            <div className={`text-xs font-semibold mt-0.5 ${getRSIColor(data.market_rsi.kosdaq)}`}>
               {data.market_rsi.kosdaq?.toFixed(1) || 'N/A'}
-              <span className="text-[10px] text-gray-400 ml-1">{getRSILabel(data.market_rsi.kosdaq)}</span>
+              <span className="text-[9px] text-gray-400 ml-0.5">{getRSILabel(data.market_rsi.kosdaq)}</span>
             </div>
           </div>
         </div>
       </div>
 
       {/* 환율 */}
-      <div className="bg-white rounded-xl p-3 border border-gray-100">
-        <div className="text-[10px] text-gray-400 mb-1.5">환율</div>
+      <div className="bg-white rounded-lg px-2.5 py-1.5 border border-gray-100">
+        <div className="text-[9px] text-gray-400 leading-none mb-1">환율</div>
         {global?.exchange && global.exchange.length > 0 ? (
-          <div className="space-y-1">
+          <div className="space-y-0.5">
             {global.exchange.slice(0, 3).map((item, i) => (
               <div key={i} className="flex items-center justify-between">
-                <span className="text-[10px] text-gray-500 truncate">{item.name}</span>
-                <div className="flex items-center gap-1">
-                  <span className="text-[11px] font-semibold text-gray-900">{item.price}</span>
+                <span className="text-[9px] text-gray-500 truncate">{item.name}</span>
+                <div className="flex items-center gap-0.5">
+                  <span className="text-[10px] font-semibold text-gray-900">{item.price}</span>
                   {item.change && (
-                    <span className={`text-[9px] ${item.isUp ? 'text-red-500' : 'text-blue-500'}`}>
+                    <span className={`text-[8px] ${item.isUp ? 'text-red-500' : 'text-blue-500'}`}>
                       {item.isUp ? '▲' : '▼'}{item.change}
                     </span>
                   )}
@@ -103,22 +103,22 @@ export default function MarketOverview({ data }: MarketOverviewProps) {
             ))}
           </div>
         ) : (
-          <div className="text-[10px] text-gray-300 animate-pulse">로딩...</div>
+          <div className="text-[9px] text-gray-300 animate-pulse">로딩...</div>
         )}
       </div>
 
       {/* 유가 */}
-      <div className="bg-white rounded-xl p-3 border border-gray-100">
-        <div className="text-[10px] text-gray-400 mb-1.5">유가</div>
+      <div className="bg-white rounded-lg px-2.5 py-1.5 border border-gray-100">
+        <div className="text-[9px] text-gray-400 leading-none mb-1">유가</div>
         {global?.oil && global.oil.length > 0 ? (
-          <div className="space-y-1">
+          <div className="space-y-0.5">
             {global.oil.slice(0, 3).map((item, i) => (
               <div key={i} className="flex items-center justify-between">
-                <span className="text-[10px] text-gray-500 truncate">{item.name}</span>
-                <div className="flex items-center gap-1">
-                  <span className="text-[11px] font-semibold text-gray-900">{item.price}</span>
+                <span className="text-[9px] text-gray-500 truncate">{item.name}</span>
+                <div className="flex items-center gap-0.5">
+                  <span className="text-[10px] font-semibold text-gray-900">{item.price}</span>
                   {item.change && (
-                    <span className={`text-[9px] ${item.isUp ? 'text-red-500' : 'text-blue-500'}`}>
+                    <span className={`text-[8px] ${item.isUp ? 'text-red-500' : 'text-blue-500'}`}>
                       {item.isUp ? '▲' : '▼'}{item.change}
                     </span>
                   )}
@@ -127,7 +127,7 @@ export default function MarketOverview({ data }: MarketOverviewProps) {
             ))}
           </div>
         ) : (
-          <div className="text-[10px] text-gray-300 animate-pulse">로딩...</div>
+          <div className="text-[9px] text-gray-300 animate-pulse">로딩...</div>
         )}
       </div>
     </div>
