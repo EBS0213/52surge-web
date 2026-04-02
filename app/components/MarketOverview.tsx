@@ -56,7 +56,7 @@ export default function MarketOverview({ data }: MarketOverviewProps) {
   }, [fetchGlobal]);
 
   return (
-    <div className="flex flex-col gap-2 min-w-0">
+    <div className="flex flex-col gap-2 min-w-0 h-full">
       {/* 거래일 */}
       <div className="bg-white rounded-xl p-3 border border-gray-100">
         <div className="text-[10px] text-gray-400 mb-0.5">거래일</div>
@@ -84,7 +84,7 @@ export default function MarketOverview({ data }: MarketOverviewProps) {
       </div>
 
       {/* 환율 */}
-      <div className="bg-white rounded-xl p-3 border border-gray-100">
+      <div className="bg-white rounded-xl p-3 border border-gray-100 flex-1">
         <div className="text-[10px] text-gray-400 mb-1.5">환율</div>
         {global?.exchange && global.exchange.length > 0 ? (
           <div className="space-y-1">
@@ -108,7 +108,7 @@ export default function MarketOverview({ data }: MarketOverviewProps) {
       </div>
 
       {/* 유가 */}
-      <div className="bg-white rounded-xl p-3 border border-gray-100">
+      <div className="bg-white rounded-xl p-3 border border-gray-100 flex-1">
         <div className="text-[10px] text-gray-400 mb-1.5">유가</div>
         {global?.oil && global.oil.length > 0 ? (
           <div className="space-y-1">
