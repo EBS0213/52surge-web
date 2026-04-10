@@ -33,7 +33,7 @@ export interface UserProfile {
   name: string;
   email: string;
   picture?: string;
-  provider: 'google' | 'kakao';
+  provider: 'google' | 'kakao' | 'local';
   createdAt: string;
   lastLoginAt: string;
 }

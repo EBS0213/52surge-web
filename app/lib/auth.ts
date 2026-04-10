@@ -11,7 +11,7 @@ export interface SessionPayload {
   name: string;
   email: string;
   picture?: string;
-  provider: 'google' | 'kakao';
+  provider: 'google' | 'kakao' | 'local';
   expiresAt: number;    // epoch ms
 }
 
