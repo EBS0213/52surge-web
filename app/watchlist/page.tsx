@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useWatchlist } from '../hooks/useWatchlist';
 import { useTrades } from '../hooks/useTrades';
+import { calculatePosition } from '../lib/turtle';
 import type { TurtleSettings, WatchlistStock, TurtleSystem, SellType, BenchmarkConfig } from '../types/stock';
 import Link from 'next/link';
 import AuthButton from '../components/AuthButton';
@@ -82,11 +83,9 @@ function SettingsPanel({
     setOpen(false);
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      handleSave();
-    }
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    handleSave();
   };
 
   if (!open) {
@@ -132,10 +131,13 @@ function SettingsPanel({
   ];
 
   return (
-    <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+    <form
+      onSubmit={handleSubmit}
+      className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm"
+    >
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-semibold">터틀 트레이딩 설정</h3>
-        <button onClick={() => setOpen(false)} className="text-gray-400 hover:text-black text-xl">×</button>
+        <button type="button" onClick={() => setOpen(false)} className="text-gray-400 hover:text-black text-xl">×</button>
       </div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {fields.map(({ key, label, step, suffix, fixed }) => (
@@ -152,7 +154,6 @@ function SettingsPanel({
                   inputMode="decimal"
                   value={toPctDisplay(key, form[key]).toString()}
                   onFocus={(e) => e.target.select()}
-                  onKeyDown={handleKeyDown}
                   onChange={(e) => {
                     const raw = e.target.value;
                     if (raw === '' || raw === '-') {
@@ -173,14 +174,21 @@ function SettingsPanel({
         ))}
       </div>
       <div className="flex gap-3 mt-4">
-        <button onClick={handleSave} className="bg-black text-white px-6 py-2 rounded-lg text-sm hover:bg-gray-800 transition-colors">
+        <button
+          type="submit"
+          className="bg-black text-white px-6 py-2 rounded-lg text-sm hover:bg-gray-800 transition-colors"
+        >
           적용
         </button>
-        <button onClick={() => setOpen(false)} className="text-gray-500 px-4 py-2 text-sm hover:text-black">
+        <button
+          type="button"
+          onClick={() => setOpen(false)}
+          className="text-gray-500 px-4 py-2 text-sm hover:text-black"
+        >
           취소
         </button>
       </div>
-    </div>
+    </form>
   );
 }
 
@@ -325,11 +333,13 @@ function StockRow({
 // ── 워치리스트 테이블 ──
 function WatchlistTable({
   stocks,
+  settings,
   selectedCodes,
   onToggle,
   onToggleAll,
 }: {
   stocks: WatchlistStock[];
+  settings: TurtleSettings;
   selectedCodes: Set<string>;
   onToggle: (code: string) => void;
   onToggleAll: () => void;
@@ -347,16 +357,39 @@ function WatchlistTable({
     }
   };
 
+  // 설정값 기반으로 유닛/비중/손절가/손익비 클라이언트 재계산.
+  // 서버는 자신의 기본 설정으로 1회 계산해 보내주지만, 사용자가 터틀 설정 창에서
+  // 시드·R·UNIT·시장장세를 바꾸면 즉시 테이블에 반영되어야 함.
+  const recomputed = useMemo<WatchlistStock[]>(() => {
+    return stocks.map((s) => {
+      if (s.sellSignal || !s.entryPrice) return s;
+      try {
+        const pos = calculatePosition(s.entryPrice, s.currentPrice || s.entryPrice, settings);
+        return {
+          ...s,
+          unitSize: pos.unitSize,
+          unitAmount: pos.positionAmount,
+          stopPrice: pos.stopPrice,
+          riskPerShare: pos.riskPerShare,
+          positionPct: pos.positionPct,
+          rrr: pos.rrr,
+        };
+      } catch {
+        return s;
+      }
+    });
+  }, [stocks, settings]);
+
   // 전체 탭: 같은 code를 가진 종목 중복 제거 (S1+S2 병합) + 정렬
   const filtered = useMemo(() => {
     let base: WatchlistStock[];
-    if (filter === 'system1') base = stocks.filter((s) => s.system === 'system1' && !s.sellSignal);
-    else if (filter === 'system2') base = stocks.filter((s) => s.system === 'system2' && !s.sellSignal);
-    else if (filter === 'sell') base = stocks.filter((s) => s.sellSignal);
+    if (filter === 'system1') base = recomputed.filter((s) => s.system === 'system1' && !s.sellSignal);
+    else if (filter === 'system2') base = recomputed.filter((s) => s.system === 'system2' && !s.sellSignal);
+    else if (filter === 'sell') base = recomputed.filter((s) => s.sellSignal);
     else {
       // 'all': 편출 제외 + 중복 code 제거
       const seen = new Map<string, WatchlistStock>();
-      for (const s of stocks) {
+      for (const s of recomputed) {
         if (s.sellSignal) continue;
         if (!seen.has(s.code)) seen.set(s.code, s);
       }
@@ -389,9 +422,9 @@ function WatchlistTable({
       return 0;
     });
     return sorted;
-  }, [stocks, filter, sortKey, sortDir]);
+  }, [recomputed, filter, sortKey, sortDir]);
 
-  const sellCount = stocks.filter((s) => s.sellSignal).length;
+  const sellCount = recomputed.filter((s) => s.sellSignal).length;
   const activeFiltered = filtered.filter((s) => !s.sellSignal);
   const allActiveSelected = activeFiltered.length > 0 && activeFiltered.every((s) => selectedCodes.has(s.code));
 
@@ -1111,6 +1144,7 @@ export default function WatchlistPage() {
             </div>
             <WatchlistTable
               stocks={data.stocks}
+              settings={data.settings}
               selectedCodes={selectedCodes}
               onToggle={handleToggle}
               onToggleAll={handleToggleAll}
