@@ -106,6 +106,8 @@ export interface WatchlistEntry {
   system: TurtleSystem;
   entryDate: string;
   entryPrice: number;
+  /** 매도 시그널이 처음 발생한 날짜 (YYYY-MM-DD). 이 날로부터 7일 후 자동 아카이브. */
+  sellSignalSince?: string;
 }
 
 /** 아카이브 엔트리 (편출 후 3주 보관) */

@@ -344,8 +344,71 @@ export async function GET(request: NextRequest) {
       enrichedStocks.push(...results);
     }
 
-    // 3. 매도 시그널 종목은 삭제하지 않고 sellSignal=true로 표시만 유지
-    // 실제 편출은 수동 DELETE 호출로만 처리 (자동 삭제 제거 — 간헐적 종목 소실 버그 방지)
+    // 3. 매도 시그널 종목의 7일 자동 아카이브 라이프사이클
+    // - 처음 sellSignal=true 가 관측된 날 → sellSignalSince 기록
+    // - sellSignalSince 로부터 7일 경과 → savedEntries 에서 제거 + savedArchive 로 이동
+    // - 시그널이 해소되면 (sellSignal=false) → sellSignalSince 초기화
+    const SELL_SIGNAL_RETENTION_DAYS = 7;
+    const todayStr = today();
+    const daysBetween = (a: string, b: string): number => {
+      const da = new Date(a).getTime();
+      const db = new Date(b).getTime();
+      if (isNaN(da) || isNaN(db)) return 0;
+      return Math.floor((db - da) / (24 * 60 * 60 * 1000));
+    };
+    const stockByKey = new Map(enrichedStocks.map((s) => [`${s.code}|${s.system}`, s]));
+    const remainingEntries: WatchlistEntry[] = [];
+    let sellLifecycleChanged = false;
+    for (const entry of savedEntries) {
+      const stock = stockByKey.get(`${entry.code}|${entry.system}`);
+      if (!stock) {
+        remainingEntries.push(entry);
+        continue;
+      }
+      if (stock.sellSignal) {
+        if (!entry.sellSignalSince) {
+          entry.sellSignalSince = todayStr;
+          sellLifecycleChanged = true;
+        }
+        const elapsed = daysBetween(entry.sellSignalSince, todayStr);
+        if (elapsed >= SELL_SIGNAL_RETENTION_DAYS) {
+          // 7일 경과 → 아카이브로 이동 후 활성 목록에서 제거
+          if (!savedArchive.some((a) => a.code === entry.code && a.system === entry.system)) {
+            savedArchive.push({
+              code: entry.code,
+              name: entry.name,
+              system: entry.system,
+              entryDate: entry.entryDate,
+              entryPrice: entry.entryPrice,
+              archivedAt: todayStr,
+              sellReason: stock.sellReason || '7일 자동 편출',
+            });
+          }
+          sellLifecycleChanged = true;
+          continue; // remainingEntries에 넣지 않음 → 제거
+        }
+        remainingEntries.push(entry);
+      } else {
+        // 시그널 해소 → sellSignalSince 초기화
+        if (entry.sellSignalSince) {
+          entry.sellSignalSince = undefined;
+          sellLifecycleChanged = true;
+        }
+        remainingEntries.push(entry);
+      }
+    }
+    if (sellLifecycleChanged) {
+      savedEntries = remainingEntries;
+      savedArchive = cleanExpiredArchive(savedArchive);
+      saveState(savedSettings, savedEntries, savedArchive);
+      // 제거된 종목은 응답에서도 제외
+      const keptKeys = new Set(savedEntries.map((e) => `${e.code}|${e.system}`));
+      for (let i = enrichedStocks.length - 1; i >= 0; i--) {
+        if (!keptKeys.has(`${enrichedStocks[i].code}|${enrichedStocks[i].system}`)) {
+          enrichedStocks.splice(i, 1);
+        }
+      }
+    }
 
     const responseBody = JSON.stringify({
       settings: savedSettings,
