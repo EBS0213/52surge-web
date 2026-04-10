@@ -100,7 +100,7 @@ export async function GET(request: NextRequest) {
     const result = await fetchStockPrice(toFetch[i]);
     if (result) stocks.push(result);
     if (i < toFetch.length - 1) {
-      await new Promise((r) => setTimeout(r, 200));
+      await new Promise((r) => setTimeout(r, 500));
     }
   }
 

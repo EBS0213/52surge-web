@@ -151,31 +151,44 @@ async function backgroundFetchAll() {
       continue;
     }
 
-    try {
-      const data = await getCurrentPrice(code);
-      const sign = String(data.prdy_vrss_sign || '');
-      const isDown = sign === '4' || sign === '5';
+    // 최대 2회 재시도 (레이트리밋 대응)
+    let success = false;
+    for (let attempt = 0; attempt < 3 && !success; attempt++) {
+      try {
+        const data = await getCurrentPrice(code);
+        const sign = String(data.prdy_vrss_sign || '');
+        const isDown = sign === '4' || sign === '5';
 
-      const info: StockPrice = {
-        code,
-        name: data.hts_kor_isnm || code,
-        price: Number(data.stck_prpr || 0),
-        change: isDown
-          ? -Math.abs(Number(data.prdy_vrss || 0))
-          : Math.abs(Number(data.prdy_vrss || 0)),
-        changeRate: isDown
-          ? -Math.abs(Number(data.prdy_ctrt || 0))
-          : Math.abs(Number(data.prdy_ctrt || 0)),
-        volume: Number(data.acml_vol || 0),
-        marketCap: Math.round(Number(data.stck_avls || 0) / 100_000_000),
-      };
+        const info: StockPrice = {
+          code,
+          name: data.hts_kor_isnm || code,
+          price: Number(data.stck_prpr || 0),
+          change: isDown
+            ? -Math.abs(Number(data.prdy_vrss || 0))
+            : Math.abs(Number(data.prdy_vrss || 0)),
+          changeRate: isDown
+            ? -Math.abs(Number(data.prdy_ctrt || 0))
+            : Math.abs(Number(data.prdy_ctrt || 0)),
+          volume: Number(data.acml_vol || 0),
+          marketCap: Math.round(Number(data.stck_avls || 0) / 100_000_000),
+        };
 
-      priceMap.set(code, info);
-      cacheSet(stockCacheKey(code), info);
-      fetched++;
-    } catch {
-      errors++;
+        priceMap.set(code, info);
+        cacheSet(stockCacheKey(code), info);
+        fetched++;
+        success = true;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : '';
+        if (msg.includes('EGW00201') || msg.includes('초당')) {
+          // 레이트리밋 → 대기 후 재시도
+          await new Promise((r) => setTimeout(r, 2000 * (attempt + 1)));
+        } else {
+          errors++;
+          break; // 다른 에러는 재시도 안 함
+        }
+      }
     }
+    if (!success && errors === 0) errors++; // 3회 모두 레이트리밋이면 에러 카운트
 
     // 100개마다 중간 결과 캐시
     if ((fetched + errors) % 100 === 0 && fetched > 0) {
@@ -186,8 +199,8 @@ async function backgroundFetchAll() {
       );
     }
 
-    // 레이트리밋 (200ms 간격)
-    await new Promise((r) => setTimeout(r, 200));
+    // 레이트리밋 방지 (500ms 간격)
+    await new Promise((r) => setTimeout(r, 500));
   }
 
   // 최종 계산 & 캐시
