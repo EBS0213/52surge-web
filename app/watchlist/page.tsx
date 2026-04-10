@@ -7,6 +7,7 @@ import { calculatePosition } from '../lib/turtle';
 import type { TurtleSettings, WatchlistStock, TurtleSystem, SellType, BenchmarkConfig } from '../types/stock';
 import Link from 'next/link';
 import AuthButton from '../components/AuthButton';
+import Navbar from '../components/Navbar';
 
 /** 숫자 포맷: 원화 */
 function formatKRW(n: number): string {
@@ -1072,29 +1073,10 @@ export default function WatchlistPage() {
   return (
     <div className="min-h-screen bg-[#f5f5f7]">
       {/* 네비게이션 — 홈과 동일한 구조 */}
-      <nav className="fixed top-0 w-full bg-[#1d1d1f]/95 backdrop-blur-xl z-50">
-        <div className="max-w-7xl mx-auto px-6 h-11 flex items-center">
-          <Link href="/" className="text-white text-xl font-semibold tracking-tight">OURTLE</Link>
-          <div className="flex items-center gap-14 ml-14">
-            <Link href="/" className="text-xs tracking-wide text-white/70 hover:text-white transition-colors">Home</Link>
-            <span className="text-xs tracking-wide text-white font-medium">Turtle</span>
-          </div>
-          <div className="flex items-center gap-4 ml-auto">
-            {data?.lastUpdated && (
-              <span className="text-[10px] text-[#86868b]">
-                {new Date(data.lastUpdated).toLocaleTimeString('ko-KR')}
-              </span>
-            )}
-            <button
-              onClick={() => refresh(true, true)}
-              className="text-xs text-[#86868b] hover:text-white transition-colors"
-            >
-              ↻
-            </button>
-            <AuthButton />
-          </div>
-        </div>
-      </nav>
+      <Navbar
+        lastUpdated={data?.lastUpdated ? new Date(data.lastUpdated) : null}
+        onRefresh={() => refresh(true, true)}
+      />
 
       {/* 헤더 */}
       <section className="pt-24 pb-6 px-6">

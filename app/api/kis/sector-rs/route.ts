@@ -48,7 +48,11 @@ export async function GET(request: NextRequest) {
     // KOSPI (0001) 시세를 먼저 가져옴 — 벤치마크
     const kospiChart = await getSectorDailyChart('0001', startStr, endStr);
     if (kospiChart.length < 2) {
-      return NextResponse.json({ error: 'KOSPI 데이터 부족' }, { status: 500 });
+      console.error(`[sector-rs] KOSPI chart length=${kospiChart.length}, start=${startStr}, end=${endStr}`);
+      return NextResponse.json(
+        { error: '장 마감 후 또는 데이터 준비 중입니다. 잠시 후 다시 시도해주세요.' },
+        { status: 503 }
+      );
     }
 
     const kospiOld = kospiChart[0].close;
@@ -58,8 +62,8 @@ export async function GET(request: NextRequest) {
     // 각 업종별 RS 계산 (KOSPI 자체 제외)
     const sectors = SECTOR_CODES.filter((s) => s.code !== '0001');
 
-    // 순차 호출 (KIS 레이트 리밋 방지: 3개씩 배치)
-    const BATCH = 3;
+    // 순차 호출 (KIS 레이트 리밋 방지: 2개씩 배치, 딜레이 확대)
+    const BATCH = 2;
     const results: {
       code: string;
       name: string;
@@ -106,9 +110,9 @@ export async function GET(request: NextRequest) {
 
       results.push(...batchResults.filter((r): r is NonNullable<typeof r> => r !== null));
 
-      // 배치 간 50ms 딜레이 (레이트 리밋 방지)
+      // 배치 간 300ms 딜레이 (레이트 리밋 방지)
       if (i + BATCH < sectors.length) {
-        await new Promise((r) => setTimeout(r, 50));
+        await new Promise((r) => setTimeout(r, 300));
       }
     }
 

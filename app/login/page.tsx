@@ -54,10 +54,9 @@ export default function LoginPage() {
     <div className="min-h-screen bg-white flex flex-col items-center justify-center px-6">
       {/* 로고 */}
       <div className="mb-10 text-center">
-        <h1 className="text-4xl font-black tracking-tight text-black">OURTLE</h1>
-        <p className="text-xs text-gray-400 tracking-[0.3em] mt-1.5 uppercase">
-          Turtle Rules Everything Around Me
-        </p>
+        <Link href="/" className="text-4xl font-black tracking-tight text-black hover:text-gray-700 transition-colors">
+          OURTLE
+        </Link>
       </div>
 
       {/* 로그인/회원가입 카드 */}
@@ -185,21 +184,6 @@ export default function LoginPage() {
           </a>
         </div>
 
-        {/* 안내 */}
-        <p className="text-center text-xs text-gray-400 leading-relaxed mt-6">
-          로그인하면 매매일지(Ledger)를 개인 계정에<br />
-          저장하고 관리할 수 있습니다.
-        </p>
-
-        {/* 돌아가기 */}
-        <div className="mt-6 text-center">
-          <Link
-            href="/"
-            className="text-sm text-gray-500 hover:text-black transition-colors"
-          >
-            ← 홈으로 돌아가기
-          </Link>
-        </div>
       </div>
     </div>
   );
