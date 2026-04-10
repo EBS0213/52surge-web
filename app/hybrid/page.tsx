@@ -47,7 +47,7 @@ const PERIODS = [
 function SectorCard({ sector }: { sector: SectorRS }) {
   const [stocks, setStocks] = useState<SectorStock[]>([]);
   const [loading, setLoading] = useState(true);
-  const [expanded, setExpanded] = useState(false);
+  // expanded 불필요 — 스크롤로 대체
 
   useEffect(() => {
     let cancelled = false;
@@ -69,7 +69,7 @@ function SectorCard({ sector }: { sector: SectorRS }) {
   const upCount = stocks.filter((s) => s.changeRate > 0).length;
   const downCount = stocks.filter((s) => s.changeRate < 0).length;
   const totalCount = stocks.length;
-  const topStocks = expanded ? stocks : stocks.slice(0, 5);
+  const topStocks = stocks;
 
   const returnColor = sector.periodReturn > 0 ? 'text-red-500' : sector.periodReturn < 0 ? 'text-blue-500' : 'text-gray-500';
 
@@ -110,8 +110,8 @@ function SectorCard({ sector }: { sector: SectorRS }) {
       {/* 구분선 */}
       <div className="border-t border-gray-100" />
 
-      {/* 종목 리스트 */}
-      <div className="px-5 py-2 flex-1">
+      {/* 종목 리스트 (스크롤) */}
+      <div className="px-5 py-2 flex-1 max-h-72 overflow-y-auto">
         {loading ? (
           <div className="space-y-2.5 py-2">
             {[...Array(5)].map((_, i) => (
@@ -146,15 +146,6 @@ function SectorCard({ sector }: { sector: SectorRS }) {
         )}
       </div>
 
-      {/* 더보기 / 접기 */}
-      {stocks.length > 5 && (
-        <button
-          onClick={() => setExpanded(!expanded)}
-          className="border-t border-gray-100 py-2.5 text-xs text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-colors w-full"
-        >
-          {expanded ? '접기 ▲' : `전체 ${totalCount}개 보기 ▼`}
-        </button>
-      )}
     </div>
   );
 }
