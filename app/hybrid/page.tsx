@@ -43,68 +43,129 @@ const PERIODS = [
   { value: 120, label: '120일' },
 ];
 
-function RSBar({ rs }: { rs: number }) {
-  // 0~100 스케일. 50이 중립, 50 이상 강세, 이하 약세
-  const isStrong = rs >= 50;
-  // 바 길이: 중심(50)에서 떨어진 거리 비율
-  const pct = Math.abs(rs - 50) * 2; // 0~100%
-  const color =
-    rs >= 70 ? 'bg-red-500' :
-    rs >= 50 ? 'bg-red-300' :
-    rs >= 30 ? 'bg-blue-300' :
-    'bg-blue-500';
+// ── 업종 카드 컴포넌트 ──────────────────────────────────────────
+function SectorCard({ sector }: { sector: SectorRS }) {
+  const [stocks, setStocks] = useState<SectorStock[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [expanded, setExpanded] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/kis/sector-stocks?code=${sector.code}`);
+        if (!res.ok) throw new Error('fail');
+        const data = await res.json();
+        if (!cancelled) setStocks(data.stocks || []);
+      } catch {
+        if (!cancelled) setStocks([]);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [sector.code]);
+
+  const upCount = stocks.filter((s) => s.changeRate > 0).length;
+  const downCount = stocks.filter((s) => s.changeRate < 0).length;
+  const totalCount = stocks.length;
+  const topStocks = expanded ? stocks : stocks.slice(0, 5);
+
+  const returnColor = sector.periodReturn > 0 ? 'text-red-500' : sector.periodReturn < 0 ? 'text-blue-500' : 'text-gray-500';
+
+  // RS 배지
+  const rsBg =
+    sector.rs >= 70 ? 'bg-green-100 text-green-700 border-green-200'
+    : sector.rs >= 50 ? 'bg-yellow-50 text-yellow-700 border-yellow-200'
+    : sector.rs >= 30 ? 'bg-gray-100 text-gray-600 border-gray-200'
+    : sector.rs >= 15 ? 'bg-orange-50 text-orange-700 border-orange-200'
+    : 'bg-red-100 text-red-700 border-red-200';
 
   return (
-    <div className="flex items-center gap-0 w-full">
-      {/* 약세 영역 (왼쪽) */}
-      <div className="flex-1 flex justify-end">
-        {!isStrong && (
-          <div className={`h-5 rounded-l-sm ${color}`} style={{ width: `${pct}%` }} />
+    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden flex flex-col">
+      {/* 헤더 */}
+      <div className="px-5 pt-4 pb-3">
+        <div className="flex items-start justify-between">
+          <div className="min-w-0 flex-1">
+            <h3 className="text-base font-bold text-gray-900 truncate">{sector.name}</h3>
+            <div className={`text-lg font-bold mt-0.5 ${returnColor}`}>
+              {sector.periodReturn > 0 ? '+' : ''}{sector.periodReturn.toFixed(2)}%
+            </div>
+          </div>
+          <span className={`text-xs font-mono px-2 py-0.5 rounded-full border flex-shrink-0 ml-3 ${rsBg}`}>
+            RS {sector.rs.toFixed(0)}
+          </span>
+        </div>
+
+        {/* 상승/하락/전체 */}
+        {!loading && totalCount > 0 && (
+          <div className="flex items-center gap-3 mt-2.5 text-xs">
+            <span className="text-red-500">▲ 상승 {upCount}개</span>
+            <span className="text-blue-500">▼ 하락 {downCount}개</span>
+            <span className="text-gray-400 ml-auto">전체 {totalCount}</span>
+          </div>
         )}
       </div>
-      {/* 중심선 (50) */}
-      <div className="w-px h-6 bg-gray-400 flex-shrink-0" />
-      {/* 강세 영역 (오른쪽) */}
-      <div className="flex-1">
-        {isStrong && (
-          <div className={`h-5 rounded-r-sm ${color}`} style={{ width: `${pct}%` }} />
+
+      {/* 구분선 */}
+      <div className="border-t border-gray-100" />
+
+      {/* 종목 리스트 */}
+      <div className="px-5 py-2 flex-1">
+        {loading ? (
+          <div className="space-y-2.5 py-2">
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="h-6 bg-gray-50 rounded animate-pulse" />
+            ))}
+          </div>
+        ) : stocks.length === 0 ? (
+          <div className="py-6 text-center text-xs text-gray-400">데이터 없음</div>
+        ) : (
+          <div>
+            {topStocks.map((stock, idx) => {
+              const sColor = stock.changeRate > 0 ? 'text-red-500' : stock.changeRate < 0 ? 'text-blue-500' : 'text-gray-400';
+              return (
+                <div
+                  key={stock.code}
+                  className="flex items-center py-2 gap-3"
+                >
+                  <span className="text-xs text-gray-400 w-5 text-right flex-shrink-0">{idx + 1}</span>
+                  <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
+                    <span className="text-[10px] font-bold text-gray-500">
+                      {stock.name.charAt(0)}
+                    </span>
+                  </div>
+                  <span className="text-sm text-gray-900 truncate flex-1">{stock.name}</span>
+                  <span className={`text-sm font-mono font-medium flex-shrink-0 ${sColor}`}>
+                    {stock.changeRate > 0 ? '+' : ''}{stock.changeRate.toFixed(2)}%
+                  </span>
+                </div>
+              );
+            })}
+          </div>
         )}
       </div>
+
+      {/* 더보기 / 접기 */}
+      {stocks.length > 5 && (
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="border-t border-gray-100 py-2.5 text-xs text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-colors w-full"
+        >
+          {expanded ? '접기 ▲' : `전체 ${totalCount}개 보기 ▼`}
+        </button>
+      )}
     </div>
   );
 }
 
+// ── 메인 페이지 ─────────────────────────────────────────────────
 export default function HybridPage() {
   const [data, setData] = useState<RSData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [period, setPeriod] = useState(20);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-
-  // 업종 클릭 → 종목 목록
-  const [expandedSector, setExpandedSector] = useState<string | null>(null);
-  const [sectorStocks, setSectorStocks] = useState<SectorStock[]>([]);
-  const [stocksLoading, setStocksLoading] = useState(false);
-
-  const toggleSector = useCallback(async (code: string) => {
-    if (expandedSector === code) {
-      setExpandedSector(null);
-      return;
-    }
-    setExpandedSector(code);
-    setStocksLoading(true);
-    setSectorStocks([]);
-    try {
-      const res = await fetch(`/api/kis/sector-stocks?code=${code}`);
-      if (!res.ok) throw new Error('Failed');
-      const result = await res.json();
-      setSectorStocks(result.stocks || []);
-    } catch {
-      setSectorStocks([]);
-    } finally {
-      setStocksLoading(false);
-    }
-  }, [expandedSector]);
 
   const fetchRS = useCallback(async (p: number, showLoading = true) => {
     if (showLoading) setLoading(true);
@@ -133,67 +194,61 @@ export default function HybridPage() {
       <main className="pt-16 px-6 pb-16">
         <div className="max-w-7xl mx-auto">
           {/* 헤더 */}
-          <div className="flex items-end justify-between mb-6 mt-4">
+          <div className="flex items-end justify-between mb-4 mt-4">
             <div>
               <h1 className="text-2xl font-bold text-gray-900">산업별 RS</h1>
               <p className="text-sm text-gray-500 mt-1">
-                업종별 Relative Strength — KOSPI 대비 상대 강도
+                업종별 Relative Strength — 70 이상 강세 | 30 이하 약세
               </p>
             </div>
           </div>
 
-          {/* 기간 선택 탭 */}
-          <div className="flex gap-1.5 mb-4">
-            {PERIODS.map(({ value, label }) => (
-              <button
-                key={value}
-                onClick={() => setPeriod(value)}
-                className={`px-4 py-1.5 text-xs font-medium rounded-full transition-colors ${
-                  period === value
-                    ? 'bg-gray-900 text-white'
-                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-
-          {/* 벤치마크 카드 */}
-          {data && (
-            <div className="bg-white rounded-xl border border-gray-200 p-4 mb-4 flex items-center gap-6">
-              <div>
-                <span className="text-xs text-gray-400">벤치마크</span>
-                <div className="text-lg font-bold">{data.benchmark.name}</div>
-              </div>
-              <div>
-                <span className="text-xs text-gray-400">현재 지수</span>
-                <div className="text-sm font-mono font-medium">
+          {/* 기간 선택 탭 + 벤치마크 */}
+          <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
+            <div className="flex gap-1.5">
+              {PERIODS.map(({ value, label }) => (
+                <button
+                  key={value}
+                  onClick={() => setPeriod(value)}
+                  className={`px-4 py-1.5 text-xs font-medium rounded-full transition-colors ${
+                    period === value
+                      ? 'bg-gray-900 text-white'
+                      : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {data && (
+              <div className="flex items-center gap-4 text-sm">
+                <span className="text-gray-400">{data.benchmark.name}</span>
+                <span className="font-mono font-medium">
                   {data.benchmark.currentIndex.toLocaleString('ko-KR', { maximumFractionDigits: 2 })}
-                </div>
-              </div>
-              <div>
-                <span className="text-xs text-gray-400">{period}일 수익률</span>
-                <div className={`text-sm font-mono font-medium ${
-                  data.benchmark.periodReturn > 0 ? 'text-red-600' : data.benchmark.periodReturn < 0 ? 'text-blue-600' : 'text-gray-600'
+                </span>
+                <span className={`font-mono font-medium ${
+                  data.benchmark.periodReturn > 0 ? 'text-red-500' : data.benchmark.periodReturn < 0 ? 'text-blue-500' : 'text-gray-500'
                 }`}>
                   {data.benchmark.periodReturn > 0 ? '+' : ''}{data.benchmark.periodReturn.toFixed(2)}%
-                </div>
+                </span>
               </div>
-              <div className="ml-auto text-xs text-gray-400">
-                70 이상 = 강세 | 30 이하 = 약세 (RSI 스타일)
-              </div>
-            </div>
-          )}
+            )}
+          </div>
 
           {/* 로딩 */}
           {loading && (
-            <div className="bg-white rounded-2xl border border-gray-100 p-6">
-              <div className="space-y-3">
-                {[...Array(10)].map((_, i) => (
-                  <div key={i} className="h-10 bg-gray-100 rounded animate-pulse" />
-                ))}
-              </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {[...Array(9)].map((_, i) => (
+                <div key={i} className="bg-white rounded-2xl border border-gray-100 p-6 h-72 animate-pulse">
+                  <div className="h-5 bg-gray-100 rounded w-24 mb-3" />
+                  <div className="h-7 bg-gray-100 rounded w-16 mb-4" />
+                  <div className="space-y-3 mt-6">
+                    {[...Array(5)].map((_, j) => (
+                      <div key={j} className="h-5 bg-gray-50 rounded" />
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
 
@@ -204,128 +259,12 @@ export default function HybridPage() {
             </div>
           )}
 
-          {/* RS 테이블 */}
+          {/* 카드 그리드 */}
           {!loading && data && data.sectors.length > 0 && (
-            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="bg-gray-50 border-b border-gray-200">
-                      <th className="py-3 px-3 text-left text-xs font-medium text-gray-500 w-8">#</th>
-                      <th className="py-3 px-3 text-left text-xs font-medium text-gray-500">업종</th>
-                      <th className="py-3 px-3 text-right text-xs font-medium text-gray-500">현재 지수</th>
-                      <th className="py-3 px-3 text-right text-xs font-medium text-gray-500">등락률</th>
-                      <th className="py-3 px-3 text-right text-xs font-medium text-gray-500">{period}일 수익률</th>
-                      <th className="py-3 px-3 text-right text-xs font-medium text-gray-500 w-20">RS</th>
-                      <th className="py-3 px-4 text-xs font-medium text-gray-500 w-64 text-center">약세 ← → 강세</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.sectors.map((sector, idx) => {
-                      const changeColor =
-                        sector.changeRate > 0 ? 'text-red-600'
-                        : sector.changeRate < 0 ? 'text-blue-600'
-                        : 'text-gray-500';
-                      const returnColor =
-                        sector.periodReturn > 0 ? 'text-red-600'
-                        : sector.periodReturn < 0 ? 'text-blue-600'
-                        : 'text-gray-500';
-                      const rsBg =
-                        sector.rs >= 70 ? 'bg-green-300 text-green-900'
-                        : sector.rs >= 50 ? 'bg-yellow-200 text-yellow-900'
-                        : sector.rs >= 30 ? 'bg-gray-200 text-gray-700'
-                        : sector.rs >= 15 ? 'bg-orange-200 text-orange-900'
-                        : 'bg-red-300 text-red-900';
-
-                      const isExpanded = expandedSector === sector.code;
-
-                      return (
-                        <React.Fragment key={sector.code}>
-                          <tr
-                            onClick={() => toggleSector(sector.code)}
-                            className={`border-b border-gray-50 hover:bg-blue-50/50 transition-colors cursor-pointer ${
-                              isExpanded ? 'bg-blue-50/30' : idx % 2 === 1 ? 'bg-gray-50/30' : ''
-                            }`}
-                          >
-                            <td className="py-2.5 px-3 text-xs text-gray-400">{sector.rsRank}</td>
-                            <td className="py-2.5 px-3 font-medium text-gray-900">
-                              <span className="flex items-center gap-1.5">
-                                <span className={`text-[10px] transition-transform ${isExpanded ? 'rotate-90' : ''}`}>&#9654;</span>
-                                {sector.name}
-                              </span>
-                            </td>
-                            <td className="py-2.5 px-3 text-right font-mono text-gray-700">
-                              {sector.currentIndex.toLocaleString('ko-KR', { maximumFractionDigits: 2 })}
-                            </td>
-                            <td className={`py-2.5 px-3 text-right font-mono ${changeColor}`}>
-                              {sector.changeRate > 0 ? '+' : ''}{sector.changeRate.toFixed(2)}%
-                            </td>
-                            <td className={`py-2.5 px-3 text-right font-mono ${returnColor}`}>
-                              {sector.periodReturn > 0 ? '+' : ''}{sector.periodReturn.toFixed(2)}%
-                            </td>
-                            <td className="py-2.5 px-3 text-right">
-                              <span className={`inline-block px-2 py-0.5 rounded font-mono text-sm ${rsBg}`}>
-                                {sector.rs.toFixed(1)}
-                              </span>
-                            </td>
-                            <td className="py-2.5 px-4">
-                              <RSBar rs={sector.rs} />
-                            </td>
-                          </tr>
-                          {isExpanded && (
-                            <tr>
-                              <td colSpan={7} className="p-0">
-                                <div className="bg-gray-50 border-y border-gray-200 px-6 py-3">
-                                  {stocksLoading ? (
-                                    <div className="flex items-center gap-2 py-4 justify-center text-sm text-gray-400">
-                                      <div className="w-4 h-4 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />
-                                      종목 불러오는 중...
-                                    </div>
-                                  ) : sectorStocks.length === 0 ? (
-                                    <div className="text-center text-sm text-gray-400 py-4">
-                                      종목 데이터를 불러올 수 없습니다
-                                    </div>
-                                  ) : (
-                                    <div>
-                                      <div className="text-xs text-gray-500 mb-2 font-medium">
-                                        {sector.name} 구성종목 ({sectorStocks.length}개)
-                                      </div>
-                                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-1.5">
-                                        {sectorStocks.map((stock) => {
-                                          const sColor = stock.changeRate > 0 ? 'text-red-600' : stock.changeRate < 0 ? 'text-blue-600' : 'text-gray-500';
-                                          return (
-                                            <div
-                                              key={stock.code}
-                                              className="flex items-center justify-between bg-white rounded-lg px-3 py-2 border border-gray-100"
-                                            >
-                                              <div className="min-w-0">
-                                                <div className="text-sm font-medium text-gray-900 truncate">{stock.name}</div>
-                                                <div className="text-[11px] text-gray-400">{stock.code}</div>
-                                              </div>
-                                              <div className="text-right flex-shrink-0 ml-3">
-                                                <div className="text-sm font-mono text-gray-800">
-                                                  {stock.price.toLocaleString()}
-                                                </div>
-                                                <div className={`text-xs font-mono ${sColor}`}>
-                                                  {stock.changeRate > 0 ? '+' : ''}{stock.changeRate.toFixed(2)}%
-                                                </div>
-                                              </div>
-                                            </div>
-                                          );
-                                        })}
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-                              </td>
-                            </tr>
-                          )}
-                        </React.Fragment>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {data.sectors.map((sector) => (
+                <SectorCard key={sector.code} sector={sector} />
+              ))}
             </div>
           )}
 
