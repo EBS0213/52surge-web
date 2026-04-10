@@ -15,6 +15,8 @@ export default function Navbar({ lastUpdated, onRefresh }: NavbarProps) {
   const navItems = [
     { href: '/', label: 'Home' },
     { href: '/watchlist', label: 'Turtle' },
+    { href: '/hybrid', label: 'Hybrid' },
+    { href: '/unimind', label: 'Unimind' },
   ];
 
   return (

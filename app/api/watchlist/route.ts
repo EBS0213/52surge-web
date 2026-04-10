@@ -161,8 +161,15 @@ async function enrichEntry(
   scanPrice?: number
 ): Promise<WatchlistStock> {
   const candles = await getCachedChart(entry.code, 90);
-  // scanPrice는 스캐너 또는 사전 KIS 조회에서 이미 확보됨
-  const currentPrice = scanPrice || entry.entryPrice;
+  // 현재가 우선순위:
+  //   1) 스캐너/KIS 현재가 조회에서 확보된 scanPrice
+  //   2) 최근 일봉 캔들의 종가 (스캔에서 빠진 오래된 종목이라도 최소한 전일 종가 반영)
+  //   3) 최종 폴백: 진입가 (수익률 0%)
+  const lastCandleClose = candles.length > 0 ? candles[candles.length - 1].close : 0;
+  const currentPrice =
+    (scanPrice && scanPrice > 0 ? scanPrice : 0) ||
+    (lastCandleClose > 0 ? lastCandleClose : 0) ||
+    entry.entryPrice;
 
   const nValue = calculateN(candles);
   const pos = calculatePosition(entry.entryPrice, currentPrice, settings);
