@@ -511,6 +511,60 @@ export async function getSectorStocks(sectorCode: string): Promise<SectorStock[]
   }
 }
 
+/** 종목 현재가 + 기간별 일봉 조회 (FHKST03010100) — output1(종목정보) + output2(일봉) */
+export async function getStockPriceWithHistory(
+  stockCode: string,
+  startDate: string, // YYYYMMDD
+  endDate: string,   // YYYYMMDD
+) {
+  const headers = await makeHeaders('FHKST03010100');
+  const params = new URLSearchParams({
+    FID_COND_MRKT_DIV_CODE: 'J',
+    FID_INPUT_ISCD: stockCode,
+    FID_INPUT_DATE_1: startDate,
+    FID_INPUT_DATE_2: endDate,
+    FID_PERIOD_DIV_CODE: 'D',
+    FID_ORG_ADJ_PRC: '0',
+  });
+
+  const res = await fetch(
+    `${BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice?${params}`,
+    { headers, cache: 'no-store' }
+  );
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`Chart request failed: ${res.status} ${body}`);
+  }
+  const data = await res.json();
+
+  const output1 = data.output1 || {};
+  const output2: Record<string, string>[] = data.output2 || [];
+
+  const sign = String(output1.prdy_vrss_sign || '');
+  const isDown = sign === '4' || sign === '5';
+
+  return {
+    name: output1.hts_kor_isnm || '',
+    price: Number(output1.stck_prpr || 0),
+    change: isDown
+      ? -Math.abs(Number(output1.prdy_vrss || 0))
+      : Math.abs(Number(output1.prdy_vrss || 0)),
+    changeRate: isDown
+      ? -Math.abs(Number(output1.prdy_ctrt || 0))
+      : Math.abs(Number(output1.prdy_ctrt || 0)),
+    volume: Number(output1.acml_vol || 0),
+    marketCap: Math.round(Number(output1.stck_avls || 0) / 100_000_000),
+    dailyCloses: output2
+      .filter((it) => it.stck_bsop_date && Number(it.stck_clpr) > 0)
+      .map((it) => ({
+        date: it.stck_bsop_date,
+        close: Number(it.stck_clpr),
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date)),
+  };
+}
+
 /** 한투 API 설정 여부 확인 */
 export function isKISConfigured(): boolean {
   return !!(APP_KEY && APP_SECRET);

@@ -5,15 +5,16 @@ import Navbar from '../components/Navbar';
 
 /* ── 타입 ─────────────────────────────────────────────────────── */
 
+type Period = '1' | '5' | '20';
+
 interface ThemeRS {
   code: string;
   name: string;
   stockCount: number;
-  avgChangeRate: number;
+  avgReturn: Record<Period, number>;
   upCount: number;
   downCount: number;
-  rs: number;
-  rsRank: number;
+  rs: Record<Period, number>;
   loaded: number;
 }
 
@@ -45,15 +46,19 @@ function rsBadgeClass(rs: number) {
   return 'bg-red-100 text-red-700 border-red-200';
 }
 
+/* ── 기간 라벨 ────────────────────────────────────────────────── */
+
+const PERIOD_LABELS: Record<Period, string> = { '1': '1일', '5': '5일', '20': '20일' };
+
 /* ── 테마 카드 컴포넌트 ──────────────────────────────────────── */
 
-function ThemeCard({ theme }: { theme: ThemeRS }) {
+function ThemeCard({ theme, period }: { theme: ThemeRS; period: Period }) {
   const [expanded, setExpanded] = useState(false);
   const [stocks, setStocks] = useState<ThemeStock[]>([]);
   const [stocksLoading, setStocksLoading] = useState(false);
 
   const fetchStocks = useCallback(async () => {
-    if (stocks.length > 0) return; // 이미 로드됨
+    if (stocks.length > 0) return;
     setStocksLoading(true);
     try {
       const res = await fetch(`/api/kis/theme-stocks?code=${theme.code}`);
@@ -73,9 +78,11 @@ function ThemeCard({ theme }: { theme: ThemeRS }) {
     if (next) fetchStocks();
   };
 
+  const avgRate = theme.avgReturn[period];
+  const rs = theme.rs[period];
   const rateColor =
-    theme.avgChangeRate > 0 ? 'text-red-500' :
-    theme.avgChangeRate < 0 ? 'text-blue-500' : 'text-gray-500';
+    avgRate > 0 ? 'text-red-500' :
+    avgRate < 0 ? 'text-blue-500' : 'text-gray-500';
 
   return (
     <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden flex flex-col">
@@ -90,15 +97,15 @@ function ThemeCard({ theme }: { theme: ThemeRS }) {
               {theme.name}
             </h3>
             <div className={`text-lg font-bold mt-0.5 ${rateColor}`}>
-              {theme.avgChangeRate > 0 ? '+' : ''}
-              {theme.avgChangeRate.toFixed(2)}%
+              {avgRate > 0 ? '+' : ''}
+              {avgRate.toFixed(2)}%
             </div>
           </div>
           <div className="flex flex-col items-end gap-1 ml-3 flex-shrink-0">
             <span
-              className={`text-xs font-mono px-2 py-0.5 rounded-full border ${rsBadgeClass(theme.rs)}`}
+              className={`text-xs font-mono px-2 py-0.5 rounded-full border ${rsBadgeClass(rs)}`}
             >
-              RS {theme.rs}
+              RS {rs}
             </span>
             <span className="text-[10px] text-gray-400">
               {theme.stockCount}종목
@@ -196,6 +203,7 @@ export default function HybridPage() {
 
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState<SortKey>('rs');
+  const [period, setPeriod] = useState<Period>('1');
 
   const fetchData = useCallback(async (showLoading = true) => {
     if (showLoading) setLoading(true);
@@ -217,14 +225,14 @@ export default function HybridPage() {
     fetchData();
   }, [fetchData]);
 
-  // 필터 & 정렬
+  // 필터 & 정렬 (기간 반영)
   const filtered = data?.themes
     .filter((t) =>
       !search || t.name.toLowerCase().includes(search.toLowerCase())
     )
     .sort((a, b) => {
-      if (sortBy === 'rs') return b.rs - a.rs || b.avgChangeRate - a.avgChangeRate;
-      if (sortBy === 'rate') return b.avgChangeRate - a.avgChangeRate;
+      if (sortBy === 'rs') return b.rs[period] - a.rs[period] || b.avgReturn[period] - a.avgReturn[period];
+      if (sortBy === 'rate') return b.avgReturn[period] - a.avgReturn[period];
       return a.name.localeCompare(b.name, 'ko');
     }) || [];
 
@@ -247,6 +255,23 @@ export default function HybridPage() {
                 </span>
               )}
             </p>
+          </div>
+
+          {/* 기간 선택 탭 */}
+          <div className="flex items-center gap-1 mb-4 bg-gray-100 rounded-full p-1 w-fit">
+            {(['1', '5', '20'] as Period[]).map((p) => (
+              <button
+                key={p}
+                onClick={() => setPeriod(p)}
+                className={`px-5 py-1.5 text-sm font-semibold rounded-full transition-colors ${
+                  period === p
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                {PERIOD_LABELS[p]}
+              </button>
+            ))}
           </div>
 
           {/* 검색 + 정렬 */}
@@ -309,7 +334,7 @@ export default function HybridPage() {
           {!loading && filtered.length > 0 && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {filtered.map((theme) => (
-                <ThemeCard key={theme.code} theme={theme} />
+                <ThemeCard key={theme.code} theme={theme} period={period} />
               ))}
             </div>
           )}
