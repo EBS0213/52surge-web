@@ -218,8 +218,19 @@ export async function getFluctuationRank(direction: 'up' | 'down' = 'up', market
   }
   const data = await res.json();
   const items = extractItems(data);
-  console.log(`[KIS] Fluctuation rank (${direction}): ${items.length} items`);
-  return items.slice(0, 30).map(parseRankItem);
+  console.log(`[KIS] Fluctuation rank (${direction}) raw: ${items.length} items`);
+
+  // KIS 응답에 반대 방향 종목이 섞여 올 수 있어 서버에서 방향성 필터링 + 재정렬.
+  const parsed = items.map(parseRankItem);
+  const filtered = parsed.filter((it) => {
+    if (direction === 'up') return it.changeRate > 0;
+    return it.changeRate < 0;
+  });
+  filtered.sort((a, b) =>
+    direction === 'up' ? b.changeRate - a.changeRate : a.changeRate - b.changeRate
+  );
+  console.log(`[KIS] Fluctuation rank (${direction}) filtered: ${filtered.length} items`);
+  return filtered.slice(0, 30);
 }
 
 /** 종목별 투자자 매매동향 (FHKST01010900) */
