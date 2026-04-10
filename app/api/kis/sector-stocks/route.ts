@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSectorStocks, SECTOR_CODES } from '../../../lib/kis-client';
+import { getSectorStocks, SECTOR_CODES, type SectorStock } from '../../../lib/kis-client';
 import { cacheGet, cacheSet, cacheGetStale } from '../../../lib/file-cache';
 
 const CACHE_TTL = 10 * 60 * 1000; // 10분 (장외 자동 3배)
@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
   setTimeout(() => preloadAllSectors(), 100);
 
   // 파일 캐시 확인
-  const cached = cacheGet<typeof stocks>(cacheKey(code), CACHE_TTL);
+  const cached = cacheGet<SectorStock[]>(cacheKey(code), CACHE_TTL);
   if (cached) {
     return NextResponse.json({
       code,
