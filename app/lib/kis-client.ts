@@ -302,6 +302,142 @@ export async function getNearHighLow(type: 'high' | 'low' = 'high', marketCode: 
   return items.slice(0, 30).map(parseRankItem);
 }
 
+// ── 업종 지수 관련 ──
+
+/** KOSPI 업종 코드 목록 (주요 업종) */
+export const SECTOR_CODES: { code: string; name: string }[] = [
+  { code: '0001', name: 'KOSPI' },
+  { code: '0002', name: '대형주' },
+  { code: '0003', name: '중형주' },
+  { code: '0004', name: '소형주' },
+  { code: '0005', name: '음식료품' },
+  { code: '0006', name: '섬유의복' },
+  { code: '0007', name: '종이목재' },
+  { code: '0008', name: '화학' },
+  { code: '0009', name: '의약품' },
+  { code: '0010', name: '비금속광물' },
+  { code: '0011', name: '철강금속' },
+  { code: '0012', name: '기계' },
+  { code: '0013', name: '전기전자' },
+  { code: '0014', name: '의료정밀' },
+  { code: '0015', name: '운수장비' },
+  { code: '0016', name: '유통업' },
+  { code: '0017', name: '전기가스업' },
+  { code: '0018', name: '건설업' },
+  { code: '0019', name: '운수창고' },
+  { code: '0020', name: '통신업' },
+  { code: '0021', name: '금융업' },
+  { code: '0024', name: '증권' },
+  { code: '0025', name: '보험' },
+  { code: '0026', name: '서비스업' },
+  { code: '0027', name: '제조업' },
+];
+
+export interface SectorIndex {
+  code: string;
+  name: string;
+  currentIndex: number;  // 현재 지수
+  change: number;        // 전일 대비
+  changeRate: number;    // 등락률 (%)
+  volume: number;        // 거래량
+}
+
+/**
+ * 업종 현재 지수 조회 (FHPUP02100000)
+ * 개별 업종의 현재 지수/등락률 조회
+ */
+export async function getSectorCurrentIndex(sectorCode: string): Promise<SectorIndex | null> {
+  const headers = await makeHeaders('FHPUP02100000');
+  const params = new URLSearchParams({
+    FID_COND_MRKT_DIV_CODE: 'U',
+    FID_INPUT_ISCD: sectorCode,
+  });
+
+  try {
+    const res = await fetch(
+      `${BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-index-price?${params}`,
+      { headers, cache: 'no-store' }
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    const o = data.output;
+    if (!o) return null;
+
+    const sign = String(o.bstp_nmix_prdy_vrss_sign || '');
+    const isDown = sign === '4' || sign === '5';
+    const rawChange = Math.abs(Number(o.bstp_nmix_prdy_vrss || 0));
+    const rawRate = Math.abs(Number(o.bstp_nmix_prdy_ctrt || 0));
+
+    return {
+      code: sectorCode,
+      name: o.hts_kor_isnm || '',
+      currentIndex: Number(o.bstp_nmix_prpr || 0),
+      change: isDown ? -rawChange : rawChange,
+      changeRate: isDown ? -rawRate : rawRate,
+      volume: Number(o.acml_vol || 0),
+    };
+  } catch (err) {
+    console.error(`[KIS] Sector index ${sectorCode} error:`, err);
+    return null;
+  }
+}
+
+export interface SectorDailyPrice {
+  date: string;     // YYYYMMDD
+  close: number;    // 지수 종가
+  open: number;
+  high: number;
+  low: number;
+  volume: number;
+}
+
+/**
+ * 업종 기간별 시세 (FHKUP03500100)
+ * 업종의 일봉 데이터 → RS 계산에 사용
+ */
+export async function getSectorDailyChart(
+  sectorCode: string,
+  startDate: string,
+  endDate: string
+): Promise<SectorDailyPrice[]> {
+  const headers = await makeHeaders('FHKUP03500100');
+  const params = new URLSearchParams({
+    FID_COND_MRKT_DIV_CODE: 'U',
+    FID_INPUT_ISCD: sectorCode,
+    FID_INPUT_DATE_1: startDate,
+    FID_INPUT_DATE_2: endDate,
+    FID_PERIOD_DIV_CODE: 'D',
+  });
+
+  try {
+    const res = await fetch(
+      `${BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-daily-indexchartprice?${params}`,
+      { headers, cache: 'no-store' }
+    );
+    if (!res.ok) {
+      console.error(`[KIS] Sector chart ${sectorCode}: HTTP ${res.status}`);
+      return [];
+    }
+    const data = await res.json();
+    const items: Record<string, string>[] = data.output2 || data.output || [];
+    return items
+      .filter((it) => it.stck_bsop_date)
+      .map((it) => ({
+        date: it.stck_bsop_date,
+        close: Number(it.bstp_nmix_prpr || it.bstp_nmix_clpr || 0),
+        open: Number(it.bstp_nmix_oprc || 0),
+        high: Number(it.bstp_nmix_hgpr || 0),
+        low: Number(it.bstp_nmix_lwpr || 0),
+        volume: Number(it.acml_vol || 0),
+      }))
+      .filter((it) => it.close > 0)
+      .sort((a, b) => a.date.localeCompare(b.date));
+  } catch (err) {
+    console.error(`[KIS] Sector chart ${sectorCode} error:`, err);
+    return [];
+  }
+}
+
 /** 한투 API 설정 여부 확인 */
 export function isKISConfigured(): boolean {
   return !!(APP_KEY && APP_SECRET);
