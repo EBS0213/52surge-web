@@ -17,12 +17,12 @@ const themes = themesData as Record<string, { name: string; stocks: string[] }>;
 
 const STOCK_TTL = 10 * 60 * 1000;     // 개별 종목 캐시 10분
 const THEME_RS_TTL = 5 * 60 * 1000;   // RS 결과 캐시 5분
-const CACHE_KEY = 'theme-rs-all';
+const CACHE_KEY = 'theme-rs-v2'; // v2: avgReturn/rs 다기간 포맷
 
 // 고유 종목 코드 추출
 const allStockCodes = [...new Set(Object.values(themes).flatMap((t) => t.stocks))];
 
-function stockCacheKey(code: string) { return `sp-${code}`; }
+function stockCacheKey(code: string) { return `sp2-${code}`; } // v2: return5d/return20d 포함
 
 type Period = '1' | '5' | '20';
 

@@ -17,7 +17,7 @@ const STOCK_TTL = 10 * 60 * 1000; // 개별 종목 캐시 10분
 const THEME_TTL = 5 * 60 * 1000;  // 테마 전체 결과 캐시 5분
 
 function themeCacheKey(code: string) { return `theme-stocks-${code}`; }
-function stockCacheKey(code: string) { return `sp-${code}`; }
+function stockCacheKey(code: string) { return `sp2-${code}`; } // v2: theme-rs와 공유
 
 interface StockPrice {
   code: string;
