@@ -33,29 +33,31 @@ const PERIODS = [
   { value: 120, label: '120일' },
 ];
 
-function RSBar({ rs, max }: { rs: number; max: number }) {
-  const pct = Math.min(Math.abs(rs - 100) / (max - 100) * 100, 100);
-  const isStrong = rs >= 100;
+function RSBar({ rs }: { rs: number }) {
+  // 0~100 스케일. 50이 중립, 50 이상 강세, 이하 약세
+  const isStrong = rs >= 50;
+  // 바 길이: 중심(50)에서 떨어진 거리 비율
+  const pct = Math.abs(rs - 50) * 2; // 0~100%
+  const color =
+    rs >= 70 ? 'bg-red-500' :
+    rs >= 50 ? 'bg-red-300' :
+    rs >= 30 ? 'bg-blue-300' :
+    'bg-blue-500';
+
   return (
-    <div className="flex items-center gap-2 w-full">
+    <div className="flex items-center gap-0 w-full">
       {/* 약세 영역 (왼쪽) */}
       <div className="flex-1 flex justify-end">
         {!isStrong && (
-          <div
-            className="h-5 rounded-l-sm bg-blue-400/70"
-            style={{ width: `${pct}%` }}
-          />
+          <div className={`h-5 rounded-l-sm ${color}`} style={{ width: `${pct}%` }} />
         )}
       </div>
-      {/* 중심선 */}
-      <div className="w-px h-6 bg-gray-300 flex-shrink-0" />
+      {/* 중심선 (50) */}
+      <div className="w-px h-6 bg-gray-400 flex-shrink-0" />
       {/* 강세 영역 (오른쪽) */}
       <div className="flex-1">
         {isStrong && (
-          <div
-            className="h-5 rounded-r-sm bg-red-400/70"
-            style={{ width: `${pct}%` }}
-          />
+          <div className={`h-5 rounded-r-sm ${color}`} style={{ width: `${pct}%` }} />
         )}
       </div>
     </div>
@@ -88,10 +90,6 @@ export default function HybridPage() {
   useEffect(() => {
     fetchRS(period);
   }, [period, fetchRS]);
-
-  const maxRS = data
-    ? Math.max(...data.sectors.map((s) => Math.abs(s.rs - 100))) + 100
-    : 150;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -148,7 +146,7 @@ export default function HybridPage() {
                 </div>
               </div>
               <div className="ml-auto text-xs text-gray-400">
-                RS 100 = 시장과 동일 | {'>'} 100 강세 | {'<'} 100 약세
+                70 이상 = 강세 | 30 이하 = 약세 (RSI 스타일)
               </div>
             </div>
           )}
@@ -198,10 +196,10 @@ export default function HybridPage() {
                         : sector.periodReturn < 0 ? 'text-blue-600'
                         : 'text-gray-500';
                       const rsColor =
-                        sector.rs >= 120 ? 'text-red-700 font-bold'
-                        : sector.rs >= 100 ? 'text-red-500 font-medium'
-                        : sector.rs >= 80 ? 'text-blue-500 font-medium'
-                        : 'text-blue-700 font-bold';
+                        sector.rs >= 70 ? 'text-red-600 font-bold'
+                        : sector.rs >= 50 ? 'text-red-400 font-medium'
+                        : sector.rs >= 30 ? 'text-gray-500 font-medium'
+                        : 'text-blue-600 font-bold';
 
                       return (
                         <tr
@@ -225,7 +223,7 @@ export default function HybridPage() {
                             {sector.rs.toFixed(1)}
                           </td>
                           <td className="py-2.5 px-4">
-                            <RSBar rs={sector.rs} max={maxRS} />
+                            <RSBar rs={sector.rs} />
                           </td>
                         </tr>
                       );

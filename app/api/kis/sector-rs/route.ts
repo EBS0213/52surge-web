@@ -87,12 +87,6 @@ export async function GET(request: NextRequest) {
             const newPrice = chart[chart.length - 1].close;
             const sectorReturn = oldPrice > 0 ? (newPrice - oldPrice) / oldPrice : 0;
 
-            // RS = (업종 수익률 / KOSPI 수익률) × 100
-            // KOSPI 수익률이 0이면 업종 수익률 부호로 처리
-            const rs = kospiReturn !== 0
-              ? (sectorReturn / kospiReturn) * 100
-              : sectorReturn > 0 ? 150 : sectorReturn < 0 ? 50 : 100;
-
             return {
               code: sector.code,
               name: current?.name || sector.name,
@@ -100,7 +94,7 @@ export async function GET(request: NextRequest) {
               change: current?.change || 0,
               changeRate: current?.changeRate || 0,
               periodReturn: Math.round(sectorReturn * 10000) / 100,
-              rs: Math.round(rs * 100) / 100,
+              rs: 0,       // 아래에서 백분위로 재계산
               rsRank: 0,
             };
           } catch (err) {
@@ -118,7 +112,16 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // RS 순위 매기기 (내림차순)
+    // RS 0~100 백분위 스케일 변환
+    // 수익률 기준으로 정렬 → 순위 → 백분위
+    // RS = (순위 - 1) / (총 업종 수 - 1) × 100  (1등 = 100, 꼴찌 = 0)
+    const n = results.length;
+    results.sort((a, b) => a.periodReturn - b.periodReturn); // 오름차순 (약한→강한)
+    results.forEach((r, idx) => {
+      r.rs = n > 1 ? Math.round((idx / (n - 1)) * 10000) / 100 : 50;
+    });
+
+    // 최종 정렬: RS 내림차순 (강한 업종이 위로)
     results.sort((a, b) => b.rs - a.rs);
     results.forEach((r, idx) => { r.rsRank = idx + 1; });
 
