@@ -195,11 +195,12 @@ export default function HybridPage() {
                         sector.periodReturn > 0 ? 'text-red-600'
                         : sector.periodReturn < 0 ? 'text-blue-600'
                         : 'text-gray-500';
-                      const rsColor =
-                        sector.rs >= 70 ? 'text-red-600 font-bold'
-                        : sector.rs >= 50 ? 'text-red-400 font-medium'
-                        : sector.rs >= 30 ? 'text-gray-500 font-medium'
-                        : 'text-blue-600 font-bold';
+                      const rsBg =
+                        sector.rs >= 70 ? 'bg-green-300 text-green-900'
+                        : sector.rs >= 50 ? 'bg-yellow-200 text-yellow-900'
+                        : sector.rs >= 30 ? 'bg-gray-200 text-gray-700'
+                        : sector.rs >= 15 ? 'bg-orange-200 text-orange-900'
+                        : 'bg-red-300 text-red-900';
 
                       return (
                         <tr
@@ -219,8 +220,10 @@ export default function HybridPage() {
                           <td className={`py-2.5 px-3 text-right font-mono ${returnColor}`}>
                             {sector.periodReturn > 0 ? '+' : ''}{sector.periodReturn.toFixed(2)}%
                           </td>
-                          <td className={`py-2.5 px-3 text-right font-mono ${rsColor}`}>
-                            {sector.rs.toFixed(1)}
+                          <td className="py-2.5 px-3 text-right">
+                            <span className={`inline-block px-2 py-0.5 rounded font-mono text-sm ${rsBg}`}>
+                              {sector.rs.toFixed(1)}
+                            </span>
                           </td>
                           <td className="py-2.5 px-4">
                             <RSBar rs={sector.rs} />
