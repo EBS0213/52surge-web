@@ -438,6 +438,73 @@ export async function getSectorDailyChart(
   }
 }
 
+// ─── 업종별 종목 시세 ───────────────────────────────────────────
+
+export interface SectorStock {
+  code: string;        // 종목코드
+  name: string;        // 종목명
+  price: number;       // 현재가
+  change: number;      // 전일 대비
+  changeRate: number;  // 등락률 (%)
+  volume: number;      // 거래량
+  marketCap: number;   // 시가총액 (억원)
+}
+
+/**
+ * 업종 구성종목 시세 조회 (FHPST01710000)
+ * 특정 업종에 속한 종목들의 현재 시세를 반환
+ */
+export async function getSectorStocks(sectorCode: string): Promise<SectorStock[]> {
+  const headers = await makeHeaders('FHPST01710000');
+  const params = new URLSearchParams({
+    FID_COND_MRKT_DIV_CODE: 'J',
+    FID_INPUT_ISCD: sectorCode,
+    FID_DIV_CLS_CODE: '0',
+    FID_BLNG_CLS_CODE: '0',
+    FID_TRGT_CLS_CODE: '0',
+    FID_TRGT_EXLS_CLS_CODE: '0',
+    FID_INPUT_PRICE_1: '0',
+    FID_INPUT_PRICE_2: '0',
+    FID_VOL_CNT: '0',
+    FID_INPUT_DATE_1: '',
+  });
+
+  try {
+    const res = await fetch(
+      `${BASE_URL}/uapi/domestic-stock/v1/quotations/psearch-title?${params}`,
+      { headers, cache: 'no-store' }
+    );
+    if (!res.ok) {
+      console.error(`[KIS] Sector stocks ${sectorCode}: HTTP ${res.status}`);
+      return [];
+    }
+    const data = await res.json();
+    const items: Record<string, string>[] = data.output || [];
+
+    return items
+      .map((item) => {
+        const sign = String(item.prdy_vrss_sign || '');
+        const isDown = sign === '4' || sign === '5';
+        const rawChange = Math.abs(Number(item.prdy_vrss || 0));
+        const rawRate = Math.abs(Number(item.prdy_ctrt || 0));
+
+        return {
+          code: item.mksc_shrn_iscd || item.stck_shrn_iscd || '',
+          name: item.hts_kor_isnm || '',
+          price: Number(item.stck_prpr || 0),
+          change: isDown ? -rawChange : rawChange,
+          changeRate: isDown ? -rawRate : rawRate,
+          volume: Number(item.acml_vol || 0),
+          marketCap: Math.round(Number(item.stck_avls || 0) / 100_000_000),
+        };
+      })
+      .filter((s) => s.code && s.name);
+  } catch (err) {
+    console.error(`[KIS] Sector stocks ${sectorCode} error:`, err);
+    return [];
+  }
+}
+
 /** 한투 API 설정 여부 확인 */
 export function isKISConfigured(): boolean {
   return !!(APP_KEY && APP_SECRET);
