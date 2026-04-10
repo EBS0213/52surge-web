@@ -1137,6 +1137,25 @@ export default function WatchlistPage() {
             <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-4">Turtle Trading</h2>
             <SystemInfo />
 
+            {/* 자동 편출 규칙 (시스템 설명 박스 바로 아래) */}
+            <div className="bg-gray-100 border border-gray-200 rounded-xl px-5 py-4 mb-8">
+              <h3 className="text-sm font-semibold text-gray-700 mb-2">자동 편출 규칙</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs text-gray-600">
+                <div className="flex items-start gap-2">
+                  <span className="text-red-500 mt-0.5">●</span>
+                  <span>손절가 이탈 시 즉시 편출</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="text-orange-500 mt-0.5">●</span>
+                  <span>시스템별 청산 시그널 발생 시 편출 (S1: 10일 저가 이탈, S2: 20일 저가 이탈)</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="text-gray-500 mt-0.5">●</span>
+                  <span>편입 후 14거래일 경과 시 자동 편출</span>
+                </div>
+              </div>
+            </div>
+
             {/* Watchlist */}
             <div className="flex items-center gap-2 mb-4">
               <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-widest">Watchlist</h2>
@@ -1155,29 +1174,6 @@ export default function WatchlistPage() {
 
       {/* Ledger 섹션 (트레이드 로그) */}
       <LedgerSection />
-
-      {/* 공통 규칙 안내 */}
-      <section className="px-6 pb-16">
-        <div className="max-w-7xl mx-auto">
-          <div className="bg-gray-50 rounded-xl p-6">
-            <h3 className="text-sm font-semibold text-gray-700 mb-3">자동 편출 규칙</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-600">
-              <div className="flex items-start gap-2">
-                <span className="text-red-500 mt-0.5">●</span>
-                <span>손절가 이탈 시 즉시 편출</span>
-              </div>
-              <div className="flex items-start gap-2">
-                <span className="text-orange-500 mt-0.5">●</span>
-                <span>시스템별 청산 시그널 발생 시 편출 (S1: 10일 저가 이탈, S2: 20일 저가 이탈)</span>
-              </div>
-              <div className="flex items-start gap-2">
-                <span className="text-gray-500 mt-0.5">●</span>
-                <span>편입 후 14거래일 경과 시 자동 편출</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
 
       {/* Footer */}
       <footer className="py-8 px-6 border-t border-gray-100">
