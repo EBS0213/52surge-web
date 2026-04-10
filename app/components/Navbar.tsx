@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import AuthButton from './AuthButton';
 
 interface NavbarProps {
   lastUpdated: Date | null;
@@ -13,8 +14,7 @@ export default function Navbar({ lastUpdated, onRefresh }: NavbarProps) {
 
   const navItems = [
     { href: '/', label: 'Home' },
-    { href: '/watchlist', label: 'Dennis' },
-    { href: '/trades', label: 'Ledger' },
+    { href: '/watchlist', label: 'Turtle' },
   ];
 
   return (
@@ -41,7 +41,7 @@ export default function Navbar({ lastUpdated, onRefresh }: NavbarProps) {
           ))}
         </div>
 
-        {/* 오른쪽: 업데이트 시간 + 새로고침 */}
+        {/* 오른쪽: 업데이트 시간 + 새로고침 + 로그인 */}
         <div className="flex items-center gap-4 ml-auto">
           {lastUpdated && (
             <span className="text-[10px] text-[#86868b]">
@@ -55,6 +55,7 @@ export default function Navbar({ lastUpdated, onRefresh }: NavbarProps) {
           >
             ↻
           </button>
+          <AuthButton />
         </div>
       </div>
     </nav>

@@ -1,3 +1,11 @@
+#!/bin/bash
+# Deploy watchlist updates to EC2
+KEY="./52surge-key.pem"
+HOST="ubuntu@3.37.194.236"
+DIR="unimind-web"
+
+echo "=== [1/4] Uploading route.ts (dedup S1/S2) ==="
+ssh -i "$KEY" "$HOST" "cat > $DIR/app/api/watchlist/route.ts" << 'ENDROUTE'
 /**
  * 터틀 트레이딩 워치리스트 API
  *
@@ -7,7 +15,7 @@
  */
 
 import { NextResponse, type NextRequest } from 'next/server';
-import { getDailyChart, getCurrentPrice } from '../../lib/kis-client';
+import { getDailyChart } from '../../lib/kis-client';
 import {
   calculateN,
   calculatePosition,
@@ -27,7 +35,6 @@ import type {
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { join } from 'path';
 
-// ── 영속 저장 (JSON 파일) ──
 const DATA_DIR = join(process.cwd(), '.data');
 const WATCHLIST_FILE = join(DATA_DIR, 'watchlist.json');
 
@@ -37,7 +44,7 @@ interface PersistedState {
   archive: ArchivedEntry[];
 }
 
-const ARCHIVE_RETENTION_DAYS = 21; // 3주 보관
+const ARCHIVE_RETENTION_DAYS = 21;
 
 function loadState(): PersistedState {
   try {
@@ -64,7 +71,6 @@ function saveState(settings: TurtleSettings, entries: WatchlistEntry[], archive?
   }
 }
 
-/** 아카이브에서 3주 지난 항목 정리 */
 function cleanExpiredArchive(archive: ArchivedEntry[]): ArchivedEntry[] {
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - ARCHIVE_RETENTION_DAYS);
@@ -72,42 +78,27 @@ function cleanExpiredArchive(archive: ArchivedEntry[]): ArchivedEntry[] {
   return archive.filter((a) => a.archivedAt >= cutoffStr);
 }
 
-// ── 상태 초기화 (파일에서 로드) ──
 const initialState = loadState();
 let savedSettings: TurtleSettings = initialState.settings;
 let savedEntries: WatchlistEntry[] = initialState.entries;
 let savedArchive: ArchivedEntry[] = initialState.archive;
 
-// 캐시: 차트 데이터 (종목코드 -> { candles, fetchedAt })
 const chartCache = new Map<string, { candles: ChartCandle[]; fetchedAt: number }>();
-const CHART_CACHE_TTL = 1 * 60 * 1000; // 1분
+const CHART_CACHE_TTL = 1 * 60 * 1000;
 
-// 스캔 데이터 캐시
 let scanCache: { data: { stocks: Array<{ code: string; name: string; close: number }> }; fetchedAt: number } | null = null;
-const SCAN_CACHE_TTL = 1 * 60 * 1000; // 1분
+const SCAN_CACHE_TTL = 1 * 60 * 1000;
 
-// 워치리스트 전체 응답 캐시 (페이지 로딩 속도 개선)
-let responseCache: { body: string; fetchedAt: number } | null = null;
-const RESPONSE_CACHE_TTL = 5 * 60 * 1000; // 5분
-
-// KIS 현재가 캐시 (불필요한 API 호출 방지)
-const kisPriceCache = new Map<string, { price: number; fetchedAt: number }>();
-const KIS_PRICE_CACHE_TTL = 10 * 60 * 1000; // 10분
-
-/** 차트 데이터 가져오기 (캐시 포함) */
 async function getCachedChart(code: string, days: number = 90): Promise<ChartCandle[]> {
   const cached = chartCache.get(code);
   if (cached && Date.now() - cached.fetchedAt < CHART_CACHE_TTL) {
     return cached.candles;
   }
-
   const endDate = new Date();
   const startDate = new Date();
   startDate.setDate(startDate.getDate() - days);
-
   const fmt = (d: Date) =>
     `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
-
   try {
     const candles = await getDailyChart(code, fmt(startDate), fmt(endDate));
     chartCache.set(code, { candles, fetchedAt: Date.now() });
@@ -117,7 +108,6 @@ async function getCachedChart(code: string, days: number = 90): Promise<ChartCan
   }
 }
 
-/** 스캔 종목 타입 (터틀 돌파 플래그 포함) */
 interface ScanStock {
   code: string;
   name: string;
@@ -128,12 +118,10 @@ interface ScanStock {
   high_55d?: number;
 }
 
-/** 백엔드에서 스캔 종목 가져오기 (전체) */
 async function getScanStocks(): Promise<ScanStock[]> {
   if (scanCache && Date.now() - scanCache.fetchedAt < SCAN_CACHE_TTL) {
     return scanCache.data.stocks;
   }
-
   const backendUrl = process.env.BACKEND_API_URL || 'http://3.37.194.236:8000';
   try {
     const res = await fetch(`${backendUrl}/api/stocks/scan?max_results=2000`, {
@@ -148,33 +136,28 @@ async function getScanStocks(): Promise<ScanStock[]> {
   }
 }
 
-/** 오늘 날짜 (YYYY-MM-DD) */
 function today(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-/** 워치리스트 종목 상세 정보 계산 (scanPrice: 스캐너에서 받은 현재가) */
 async function enrichEntry(
   entry: WatchlistEntry,
   settings: TurtleSettings,
   scanPrice?: number
 ): Promise<WatchlistStock> {
   const candles = await getCachedChart(entry.code, 90);
-  // scanPrice는 스캐너 또는 사전 KIS 조회에서 이미 확보됨
-  const currentPrice = scanPrice || entry.entryPrice;
+  let currentPrice = scanPrice || entry.entryPrice;
 
   const nValue = calculateN(candles);
   const pos = calculatePosition(entry.entryPrice, currentPrice, settings);
   const tradingDays = countTradingDays(entry.entryDate, today());
 
-  // N일 고가/저가 계산
   const high20d = candles.length >= 20 ? getHighN(candles.slice(-20), 20) : 0;
   const low10d = candles.length >= 10 ? getLowN(candles.slice(-10), 10) : 0;
   const high55d = candles.length >= 55 ? getHighN(candles.slice(-55), 55) : 0;
   const low20d = candles.length >= 20 ? getLowN(candles.slice(-20), 20) : 0;
 
-  // 매도 시그널 확인
   const sellCheck = checkSellSignal(
     entry.system,
     currentPrice,
@@ -190,10 +173,7 @@ async function enrichEntry(
     entryDate: entry.entryDate,
     entryPrice: entry.entryPrice,
     currentPrice,
-    high20d,
-    low10d,
-    high55d,
-    low20d,
+    high20d, low10d, high55d, low20d,
     nValue,
     unitSize: pos.unitSize,
     unitAmount: pos.positionAmount,
@@ -208,41 +188,33 @@ async function enrichEntry(
   };
 }
 
-// ── GET: 워치리스트 조회 ──
-export async function GET(request: NextRequest) {
+// ── GET ──
+export async function GET() {
   try {
-    // 캐시 히트 시 즉시 반환 (새로고침 버튼은 ?refresh=1로 우회)
-    const forceRefresh = request.nextUrl.searchParams.get('refresh') === '1';
-    if (!forceRefresh && responseCache && Date.now() - responseCache.fetchedAt < RESPONSE_CACHE_TTL) {
-      return new NextResponse(responseCache.body, {
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }
-
-    // 1. 스캔 종목 가져와서 새로운 진입 시그널 확인
     const scanStocks = await getScanStocks();
     const existingCodes = new Set(savedEntries.map((e) => e.code));
 
-    // 아카이브에서 3주 지난 항목 정리
     savedArchive = cleanExpiredArchive(savedArchive);
     const archivedCodes = new Set(savedArchive.map((a) => a.code));
 
-    // 스캔 종목 중 아직 편입되지 않은 종목에 대해 돌파 플래그로 시그널 확인
-    // (스캐너가 이미 2000개 전체에 대해 20일/55일 돌파를 계산해놓음 → KIS API 불필요)
     const newStocks = scanStocks.filter((s) => !existingCodes.has(s.code));
 
     for (const stock of newStocks) {
-      // 이미 편입된 종목의 시스템 목록 (같은 종목이 system1, system2 둘 다 들어갈 수 있음)
-      const existingSystems = new Set(
-        savedEntries.filter((e) => e.code === stock.code).map((e) => e.system)
-      );
+      if (existingCodes.has(stock.code)) continue;
 
-      // 시스템1: 20일 돌파
-      if (stock.breakout_20d && !existingSystems.has('system1')) {
+      // S2(55일) 우선, 아니면 S1(20일). 같은 종목은 하나의 시스템만 편입
+      let addedSystem: 'system1' | 'system2' | null = null;
+      if (stock.breakout_55d) {
+        addedSystem = 'system2';
+      } else if (stock.breakout_20d) {
+        addedSystem = 'system1';
+      }
+
+      if (addedSystem) {
         savedEntries.push({
           code: stock.code,
           name: stock.name,
-          system: 'system1',
+          system: addedSystem,
           entryDate: today(),
           entryPrice: stock.close,
         });
@@ -250,69 +222,28 @@ export async function GET(request: NextRequest) {
           savedArchive = savedArchive.filter((a) => a.code !== stock.code);
           archivedCodes.delete(stock.code);
         }
+        existingCodes.add(stock.code);
       }
-
-      // 시스템2: 55일 돌파 (20일 돌파와 독립적으로 체크 — 둘 다 해당되면 둘 다 편입)
-      if (stock.breakout_55d && !existingSystems.has('system2')) {
-        savedEntries.push({
-          code: stock.code,
-          name: stock.name,
-          system: 'system2',
-          entryDate: today(),
-          entryPrice: stock.close,
-        });
-        if (archivedCodes.has(stock.code)) {
-          savedArchive = savedArchive.filter((a) => a.code !== stock.code);
-          archivedCodes.delete(stock.code);
-        }
-      }
-
-      existingCodes.add(stock.code);
     }
 
-    // 스캔 후 변경사항 저장
+    // 기존 중복 정리: 같은 code가 S1+S2 둘 다 있으면 S2만 남김
+    const deduped: WatchlistEntry[] = [];
+    const seen = new Set<string>();
+    const sorted = [...savedEntries].sort((a, b) =>
+      a.system === 'system2' && b.system !== 'system2' ? -1 :
+      b.system === 'system2' && a.system !== 'system2' ? 1 : 0
+    );
+    for (const entry of sorted) {
+      if (!seen.has(entry.code)) {
+        seen.add(entry.code);
+        deduped.push(entry);
+      }
+    }
+    savedEntries = deduped;
+
     saveState(savedSettings, savedEntries);
 
-    // 2. 각 편입 종목 상세 정보 계산 (병렬 배치)
     const scanPriceMap = new Map(scanStocks.map((s) => [s.code, s.close]));
-
-    // 스캐너에 없는 종목들은 KIS API로 현재가 보충 (캐시 활용)
-    const missingCodes = savedEntries
-      .map((e) => e.code)
-      .filter((code) => !scanPriceMap.has(code));
-    if (missingCodes.length > 0) {
-      const unique = [...new Set(missingCodes)];
-      // 캐시에 있는 것은 바로 사용, 없는 것만 KIS API 호출
-      const toFetch: string[] = [];
-      for (const code of unique) {
-        const cached = kisPriceCache.get(code);
-        if (cached && Date.now() - cached.fetchedAt < KIS_PRICE_CACHE_TTL) {
-          scanPriceMap.set(code, cached.price);
-        } else {
-          toFetch.push(code);
-        }
-      }
-      if (toFetch.length > 0) {
-        const prices = await Promise.all(
-          toFetch.map(async (code) => {
-            try {
-              const data = await getCurrentPrice(code);
-              const p = Number(data?.stck_prpr);
-              return [code, p > 0 ? p : undefined] as const;
-            } catch {
-              return [code, undefined] as const;
-            }
-          })
-        );
-        for (const [code, price] of prices) {
-          if (price) {
-            scanPriceMap.set(code, price);
-            kisPriceCache.set(code, { price, fetchedAt: Date.now() });
-          }
-        }
-      }
-    }
-
     const BATCH = 10;
     const enrichedStocks: WatchlistStock[] = [];
 
@@ -325,18 +256,14 @@ export async function GET(request: NextRequest) {
             return await enrichEntry(entry, savedSettings, scanPrice);
           } catch {
             return {
-              code: entry.code,
-              name: entry.name,
-              system: entry.system,
-              entryDate: entry.entryDate,
-              entryPrice: entry.entryPrice,
+              code: entry.code, name: entry.name, system: entry.system,
+              entryDate: entry.entryDate, entryPrice: entry.entryPrice,
               currentPrice: scanPriceMap.get(entry.code) || entry.entryPrice,
               high20d: 0, low10d: 0, high55d: 0, low20d: 0,
               nValue: 0, unitSize: 0, unitAmount: 0,
               stopPrice: 0, riskPerShare: 0, positionPct: 0, rrr: 0,
               pnlPct: 0, tradingDays: 0,
-              sellSignal: false,
-              sellReason: undefined,
+              sellSignal: false, sellReason: undefined,
             } as WatchlistStock;
           }
         })
@@ -344,17 +271,10 @@ export async function GET(request: NextRequest) {
       enrichedStocks.push(...results);
     }
 
-    // 3. 매도 시그널 종목은 삭제하지 않고 sellSignal=true로 표시만 유지
-    // 실제 편출은 수동 DELETE 호출로만 처리 (자동 삭제 제거 — 간헐적 종목 소실 버그 방지)
-
-    const responseBody = JSON.stringify({
+    return NextResponse.json({
       settings: savedSettings,
       stocks: enrichedStocks,
       lastUpdated: new Date().toISOString(),
-    });
-    responseCache = { body: responseBody, fetchedAt: Date.now() };
-    return new NextResponse(responseBody, {
-      headers: { 'Content-Type': 'application/json' },
     });
   } catch (error) {
     return NextResponse.json(
@@ -364,21 +284,17 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// ── POST: 설정 업데이트 또는 종목 수동 추가 ──
+// ── POST ──
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    // 설정 업데이트
     if (body.action === 'updateSettings' && body.settings) {
       savedSettings = { ...savedSettings, ...body.settings };
       saveState(savedSettings, savedEntries);
-      responseCache = null;
       return NextResponse.json({ success: true, settings: savedSettings });
     }
 
-    // 편출 종목 정리 (auto_scheduler에서 장마감 후 호출)
-    // sellSignal=true인 종목을 아카이브로 이동
     if (body.action === 'cleanupSellSignals') {
       const enrichedStocks: WatchlistStock[] = [];
       for (const entry of savedEntries) {
@@ -403,28 +319,21 @@ export async function POST(request: NextRequest) {
       const toArchive = enrichedStocks.filter((s) => s.sellSignal);
       const toKeep = enrichedStocks.filter((s) => !s.sellSignal);
 
-      // 편출 종목을 아카이브로 이동
       for (const stock of toArchive) {
-        // 이미 아카이브에 있으면 스킵
         if (!savedArchive.some((a) => a.code === stock.code)) {
           savedArchive.push({
-            code: stock.code,
-            name: stock.name,
-            system: stock.system,
-            entryDate: stock.entryDate,
-            entryPrice: stock.entryPrice,
+            code: stock.code, name: stock.name, system: stock.system,
+            entryDate: stock.entryDate, entryPrice: stock.entryPrice,
             archivedAt: today(),
             sellReason: stock.sellReason || '편출',
           });
         }
       }
 
-      // 활성 목록에서 편출 종목 제거
       savedEntries = savedEntries.filter((e) =>
         toKeep.some((k) => k.code === e.code)
       );
 
-      // 3주 지난 아카이브 정리
       savedArchive = cleanExpiredArchive(savedArchive);
       saveState(savedSettings, savedEntries, savedArchive);
 
@@ -436,7 +345,6 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // 종목 수동 추가
     if (body.action === 'addStock' && body.entry) {
       const entry: WatchlistEntry = {
         code: body.entry.code,
@@ -446,7 +354,6 @@ export async function POST(request: NextRequest) {
         entryPrice: body.entry.entryPrice,
       };
 
-      // 중복 확인
       if (savedEntries.some((e) => e.code === entry.code)) {
         return NextResponse.json(
           { error: '이미 워치리스트에 포함된 종목입니다.' },
@@ -468,7 +375,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// ── DELETE: 종목 편출 ──
+// ── DELETE ──
 export async function DELETE(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -486,7 +393,6 @@ export async function DELETE(request: NextRequest) {
     }
 
     saveState(savedSettings, savedEntries);
-    responseCache = null;
     return NextResponse.json({ success: true, removed: code });
   } catch (error) {
     return NextResponse.json(
@@ -495,3 +401,53 @@ export async function DELETE(request: NextRequest) {
     );
   }
 }
+ENDROUTE
+
+echo "=== [2/4] Patching page.tsx (remove S1+S2 badge + scroll box) ==="
+ssh -i "$KEY" "$HOST" "cd $DIR && python3 -c \"
+import re
+
+with open('app/watchlist/page.tsx', 'r') as f:
+    code = f.read()
+
+# 1. Remove dualSystem badge block from StockRow
+# Remove the S1+S2 badge JSX (the {dualSystem && ...} block)
+code = re.sub(
+    r'\\s*\\{dualSystem && \\([\\s\\S]*?S1\\+S2[\\s\\S]*?\\)\\}',
+    '',
+    code
+)
+
+# 2. Remove dualSystem prop from StockRow component signature
+code = code.replace('  dualSystem,\\n', '')
+code = code.replace('  dualSystem: boolean;\\n', '')
+
+# 3. Remove dualSystem calculation and prop passing in WatchlistTable
+code = re.sub(
+    r'\\s*const dualSystem = stocks\\.some\\([\\s\\S]*?\\);',
+    '',
+    code
+)
+code = re.sub(r'\\s*dualSystem=\\{dualSystem\\}', '', code)
+
+# 4. Add scroll container: replace overflow-x-auto with max-h + overflow-auto
+code = code.replace(
+    'className=\\\"overflow-x-auto rounded-xl border border-gray-100\\\"',
+    'className=\\\"rounded-xl border border-gray-100 max-h-[900px] overflow-auto\\\"'
+)
+
+with open('app/watchlist/page.tsx', 'w') as f:
+    f.write(code)
+
+print('page.tsx patched successfully')
+\""
+
+echo "=== [3/4] Building & restarting ==="
+ssh -i "$KEY" "$HOST" "cd $DIR && npm run build && pm2 restart unimind-web"
+
+echo "=== [4/4] Triggering cleanup (편출 처리) ==="
+sleep 3
+ssh -i "$KEY" "$HOST" "curl -s -X POST http://localhost:3000/api/watchlist -H 'Content-Type: application/json' -d '{\"action\":\"cleanupSellSignals\"}'"
+
+echo ""
+echo "=== ALL DONE ==="

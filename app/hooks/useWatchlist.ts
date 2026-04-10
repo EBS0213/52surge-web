@@ -9,12 +9,13 @@ export function useWatchlist() {
   const [error, setError] = useState<string | null>(null);
   const isMountedRef = useRef(true);
 
-  const fetchWatchlist = useCallback(async (showLoading = true) => {
+  const fetchWatchlist = useCallback(async (showLoading = true, forceRefresh = false) => {
     if (showLoading) setLoading(true);
     setError(null);
 
     try {
-      const res = await fetch('/api/watchlist');
+      const url = forceRefresh ? '/api/watchlist?refresh=1' : '/api/watchlist';
+      const res = await fetch(url);
       if (!res.ok) throw new Error(`API 오류: ${res.status}`);
       const result: WatchlistResult = await res.json();
       if (isMountedRef.current) {
@@ -29,20 +30,13 @@ export function useWatchlist() {
     }
   }, []);
 
-  const updateSettings = useCallback(async (settings: Partial<TurtleSettings>) => {
-    try {
-      const res = await fetch('/api/watchlist', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'updateSettings', settings }),
-      });
-      if (!res.ok) throw new Error('설정 업데이트 실패');
-      // 설정 변경 후 데이터 새로고침
-      await fetchWatchlist(false);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '설정 업데이트 실패');
-    }
-  }, [fetchWatchlist]);
+  // 설정값을 클라이언트 로컬 state로 관리 (서버 저장 X → 각 접속자 독립, 창 닫으면 초기화)
+  const updateSettings = useCallback((settings: Partial<TurtleSettings>) => {
+    setData((prev) => {
+      if (!prev) return prev;
+      return { ...prev, settings: { ...prev.settings, ...settings } };
+    });
+  }, []);
 
   const addStock = useCallback(async (
     code: string,

@@ -311,14 +311,14 @@ export default function StockGrid({
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-1">
-            <h2 className="text-2xl font-bold mr-1">워치리스트</h2>
+            <h2 className="text-2xl font-bold mr-1">52주 신고가</h2>
             {/* 필터 토글 — 타이틀 바로 옆 */}
             <button
               onClick={() => setShowFilter(!showFilter)}
-              className={`px-2 py-0.5 text-[11px] font-medium rounded-full transition-colors ${
+              className={`px-2.5 py-1 text-[11px] font-medium rounded-full transition-colors border ${
                 showFilter || isFiltered
-                  ? 'bg-gray-900 text-white'
-                  : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                  ? 'bg-gray-900 text-white border-gray-900'
+                  : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-100 hover:border-gray-400'
               }`}
             >
               <svg className="w-2.5 h-2.5 inline-block mr-0.5 -mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -326,7 +326,7 @@ export default function StockGrid({
               </svg>
               필터{isFiltered ? ' ON' : ''}
             </button>
-            <span className="text-xs text-gray-400 ml-1">
+            <span className="text-sm font-medium text-gray-500 ml-2">
               {isFiltered ? `${stocks.length}/${data.total_found}` : `${data.total_found}개`}
               {isRealtimeAvailable && <span className="ml-1 text-green-500">LIVE</span>}
             </span>

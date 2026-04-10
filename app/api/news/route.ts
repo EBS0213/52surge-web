@@ -1,12 +1,11 @@
 /**
- * 경제 뉴스 하이브리드 API
- * - 국내 RSS: 한경, 매경, 연합뉴스 (무료, 무제한)
- * - 네이버: SerpAPI naver 엔진
- * - 글로벌: SerpAPI google_news 엔진
- * - 중국: SerpAPI baidu_news 엔진 (한국어 번역)
- * - 시장: SerpAPI google_finance_markets (지수 데이터)
+ * 경제 뉴스 API (SerpAPI 제거, 전면 RSS 기반)
  *
- * SerpAPI 무료 플랜 = 월 100회 → 캐시 30분으로 절약
+ * - 국내 RSS: 한경, 매경, 연합뉴스, 정책브리핑, 연합인포맥스
+ * - 네이버 RSS: 네이버 뉴스 경제 섹션
+ * - 글로벌 RSS: Reuters, CNBC, Bloomberg (한국어 번역)
+ * - 중국 RSS: Xinhua, Caixin (한국어 번역)
+ * - KCIF: 국제금융센터 스크래핑
  */
 
 import { NextResponse } from 'next/server';
@@ -23,14 +22,13 @@ interface NewsItem {
 // ────────────────────────────────────────
 // 캐시 설정
 // ────────────────────────────────────────
-const RSS_CACHE_TTL = 10 * 60 * 1000;   // RSS: 10분
-const SERP_CACHE_TTL = 3 * 60 * 60 * 1000;  // SerpAPI: 3시간 (쿼터 절약)
+const RSS_CACHE_TTL = 10 * 60 * 1000; // 10분
 
 interface Cache<T> { data: T; fetchedAt: number }
 let rssCache: Cache<NewsItem[]> | null = null;
 let naverCache: Cache<NewsItem[]> | null = null;
-let googleCache: Cache<NewsItem[]> | null = null;
-let baiduCache: Cache<NewsItem[]> | null = null;
+let globalCache: Cache<NewsItem[]> | null = null;
+let chinaCache: Cache<NewsItem[]> | null = null;
 let kcifCache: Cache<NewsItem[]> | null = null;
 
 function isFresh<T>(cache: Cache<T> | null, ttl: number): cache is Cache<T> {
@@ -47,7 +45,6 @@ async function translateToKo(text: string): Promise<string> {
     const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
     if (!res.ok) return text;
     const data = await res.json();
-    // 응답 형식: [[["번역문","원문",null,null,10]],null,"en"]
     if (Array.isArray(data) && Array.isArray(data[0])) {
       return data[0].map((seg: string[]) => seg[0]).join('');
     }
@@ -57,13 +54,11 @@ async function translateToKo(text: string): Promise<string> {
   }
 }
 
-/** 한국어인지 간단 체크 */
 function isKorean(text: string): boolean {
   const koreanChars = text.match(/[\uac00-\ud7af]/g);
   return !!koreanChars && koreanChars.length > text.length * 0.15;
 }
 
-/** 필요 시 번역 */
 async function translateIfNeeded(items: NewsItem[]): Promise<NewsItem[]> {
   const results: NewsItem[] = [];
   for (const item of items) {
@@ -81,9 +76,48 @@ async function translateIfNeeded(items: NewsItem[]): Promise<NewsItem[]> {
 }
 
 // ────────────────────────────────────────
-// RSS 피드 (국내 경제 뉴스) — 무료
+// RSS 파서 공통
 // ────────────────────────────────────────
-const RSS_FEEDS = [
+function extractTag(xml: string, tag: string): string {
+  const cdataRegex = new RegExp(`<${tag}[^>]*>\\s*<!\\[CDATA\\[([\\s\\S]*?)\\]\\]>\\s*</${tag}>`, 'i');
+  const cdataMatch = xml.match(cdataRegex);
+  if (cdataMatch) return cdataMatch[1].trim();
+  const regex = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`, 'i');
+  const match = xml.match(regex);
+  return match ? match[1].trim() : '';
+}
+
+function stripHtml(html: string): string {
+  return html.replace(/<[^>]*>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").trim();
+}
+
+async function fetchRssFeed(url: string, source: string, maxItems = 5): Promise<NewsItem[]> {
+  try {
+    const res = await fetch(url, {
+      signal: AbortSignal.timeout(8000),
+      headers: { 'User-Agent': 'OURTLE/1.0 RSS Reader' },
+    });
+    if (!res.ok) return [];
+    const xml = await res.text();
+    const items: NewsItem[] = [];
+    const itemRegex = /<item>([\s\S]*?)<\/item>/gi;
+    let match;
+    while ((match = itemRegex.exec(xml)) !== null && items.length < maxItems) {
+      const block = match[1];
+      const title = stripHtml(extractTag(block, 'title'));
+      const link = extractTag(block, 'link').replace(/\s/g, '');
+      const pubDate = extractTag(block, 'pubDate');
+      const description = stripHtml(extractTag(block, 'description')).slice(0, 200);
+      if (title && link) items.push({ title, link, source, pubDate, description });
+    }
+    return items;
+  } catch { return []; }
+}
+
+// ────────────────────────────────────────
+// 국내 RSS 피드
+// ────────────────────────────────────────
+const DOMESTIC_FEEDS = [
   { url: 'https://www.hankyung.com/feed/finance', source: '한국경제' },
   { url: 'https://www.hankyung.com/feed/economy', source: '한국경제' },
   { url: 'https://www.hankyung.com/feed/all-news', source: '한국경제' },
@@ -100,48 +134,11 @@ const RSS_FEEDS = [
   { url: 'https://news.einfomax.co.kr/rss/S1N23.xml', source: '연합인포맥스' },
 ];
 
-function extractTag(xml: string, tag: string): string {
-  const cdataRegex = new RegExp(`<${tag}[^>]*>\\s*<!\\[CDATA\\[([\\s\\S]*?)\\]\\]>\\s*</${tag}>`, 'i');
-  const cdataMatch = xml.match(cdataRegex);
-  if (cdataMatch) return cdataMatch[1].trim();
-  const regex = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`, 'i');
-  const match = xml.match(regex);
-  return match ? match[1].trim() : '';
-}
-
-function stripHtml(html: string): string {
-  return html.replace(/<[^>]*>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").trim();
-}
-
-async function fetchRssFeed(url: string, source: string): Promise<NewsItem[]> {
-  try {
-    const res = await fetch(url, {
-      signal: AbortSignal.timeout(8000),
-      headers: { 'User-Agent': 'OURTLE/1.0 RSS Reader' },
-    });
-    if (!res.ok) return [];
-    const xml = await res.text();
-    const items: NewsItem[] = [];
-    const itemRegex = /<item>([\s\S]*?)<\/item>/gi;
-    let match;
-    while ((match = itemRegex.exec(xml)) !== null && items.length < 5) {
-      const block = match[1];
-      const title = stripHtml(extractTag(block, 'title'));
-      const link = extractTag(block, 'link').replace(/\s/g, '');
-      const pubDate = extractTag(block, 'pubDate');
-      const description = stripHtml(extractTag(block, 'description')).slice(0, 200);
-      if (title && link) items.push({ title, link, source, pubDate, description });
-    }
-    return items;
-  } catch { return []; }
-}
-
-async function fetchRssNews(): Promise<NewsItem[]> {
+async function fetchDomesticNews(): Promise<NewsItem[]> {
   if (isFresh(rssCache, RSS_CACHE_TTL)) return rssCache.data;
-  const results = await Promise.all(RSS_FEEDS.map((f) => fetchRssFeed(f.url, f.source)));
+  const results = await Promise.all(DOMESTIC_FEEDS.map((f) => fetchRssFeed(f.url, f.source)));
   const all = dedup(sortByDate(results.flat()));
 
-  // 매체별 최대 5개씩 균등 배분 후 최신순 정렬
   const bySource = new Map<string, NewsItem[]>();
   for (const item of all) {
     const arr = bySource.get(item.source) || [];
@@ -149,108 +146,68 @@ async function fetchRssNews(): Promise<NewsItem[]> {
     bySource.set(item.source, arr);
   }
   const items = sortByDate(Array.from(bySource.values()).flat());
-
   rssCache = { data: items, fetchedAt: Date.now() };
   return items;
 }
 
 // ────────────────────────────────────────
-// SerpAPI 헬퍼
+// 네이버 뉴스 RSS (SerpAPI 대체)
 // ────────────────────────────────────────
-function getSerpKey(): string | undefined {
-  return process.env.SERPAPI_KEY;
-}
+const NAVER_RSS_FEEDS = [
+  { url: 'https://news.google.com/rss/search?q=%EC%A6%9D%EC%8B%9C+%EA%B2%BD%EC%A0%9C&hl=ko&gl=KR&ceid=KR:ko', source: '구글뉴스(한국)' },
+  { url: 'https://news.google.com/rss/search?q=%EC%BD%94%EC%8A%A4%ED%94%BC+%EC%BD%94%EC%8A%A4%EB%8B%A5&hl=ko&gl=KR&ceid=KR:ko', source: '구글뉴스(한국)' },
+  { url: 'https://www.sedaily.com/RSS/Economy', source: '서울경제' },
+  { url: 'https://www.sedaily.com/RSS/Stock', source: '서울경제' },
+  { url: 'https://rss.donga.com/economy.xml', source: '동아일보' },
+];
 
-async function serpFetch(params: Record<string, string>): Promise<Record<string, unknown> | null> {
-  const apiKey = getSerpKey();
-  if (!apiKey) return null;
-  const qs = new URLSearchParams({ ...params, api_key: apiKey }).toString();
-  try {
-    const res = await fetch(`https://serpapi.com/search.json?${qs}`, {
-      signal: AbortSignal.timeout(12000),
-    });
-    if (!res.ok) return null;
-    return await res.json();
-  } catch { return null; }
-}
-
-// ────────────────────────────────────────
-// 네이버 뉴스 (SerpAPI naver 엔진)
-// ────────────────────────────────────────
 async function fetchNaverNews(): Promise<NewsItem[]> {
-  if (isFresh(naverCache, SERP_CACHE_TTL)) return naverCache.data;
-
-  const data = await serpFetch({ engine: 'naver', query: '증시 경제', where: 'news' });
-  if (!data) return (naverCache as Cache<NewsItem[]> | null)?.data || [];
-
-  const newsResults = (data.news_results || []) as Array<Record<string, unknown>>;
-  const items: NewsItem[] = newsResults.slice(0, 8).map((item) => ({
-    title: String(item.title || '').replace(/<[^>]*>/g, ''),
-    link: String(item.link || ''),
-    source: String(item.source || '네이버'),
-    pubDate: String(item.date || ''),
-    description: String(item.snippet || '').replace(/<[^>]*>/g, '').slice(0, 200),
-  }));
-
+  if (isFresh(naverCache, RSS_CACHE_TTL)) return naverCache.data;
+  const results = await Promise.all(NAVER_RSS_FEEDS.map((f) => fetchRssFeed(f.url, f.source, 8)));
+  const items = dedup(sortByDate(results.flat())).slice(0, 15);
   naverCache = { data: items, fetchedAt: Date.now() };
   return items;
 }
 
 // ────────────────────────────────────────
-// 구글 뉴스 (SerpAPI google_news 엔진)
+// 글로벌 뉴스 RSS (SerpAPI 대체)
 // ────────────────────────────────────────
-async function fetchGoogleNews(): Promise<NewsItem[]> {
-  if (isFresh(googleCache, SERP_CACHE_TTL)) return googleCache.data;
+const GLOBAL_FEEDS = [
+  { url: 'https://news.google.com/rss/search?q=stock+market+economy&hl=en&gl=US&ceid=US:en', source: 'Google News' },
+  { url: 'https://news.google.com/rss/topics/CAAqJggKIiBDQkFTRWdvSUwyMHZNRGx6TVdZU0FtdHZHZ0pMVWlnQVAB?hl=ko&gl=KR&ceid=KR:ko', source: 'Google News(비즈니스)' },
+  { url: 'https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100003114', source: 'CNBC' },
+  { url: 'https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10001147', source: 'CNBC' },
+  { url: 'https://feeds.bbci.co.uk/news/business/rss.xml', source: 'BBC Business' },
+];
 
-  const data = await serpFetch({ engine: 'google_news', q: 'stock market economy', gl: 'us', hl: 'en' });
-  if (!data) return (googleCache as Cache<NewsItem[]> | null)?.data || [];
-
-  const newsResults = (data.news_results || []) as Array<Record<string, unknown>>;
-  const items: NewsItem[] = newsResults.slice(0, 8).map((item) => {
-    const stories = (item.stories || []) as Array<Record<string, unknown>>;
-    const first = stories.length > 0 ? stories[0] : item;
-    return {
-      title: String(first.title || item.title || ''),
-      link: String(first.link || item.link || ''),
-      source: String((first.source as Record<string,unknown>)?.name || (item.source as Record<string,unknown>)?.name || 'Google News'),
-      pubDate: String(first.date || item.date || ''),
-      description: String(first.snippet || item.snippet || '').slice(0, 200),
-    };
-  });
-
-  // 영어 → 한국어 번역
-  const translated = await translateIfNeeded(items);
-  googleCache = { data: translated, fetchedAt: Date.now() };
+async function fetchGlobalNews(): Promise<NewsItem[]> {
+  if (isFresh(globalCache, RSS_CACHE_TTL)) return globalCache.data;
+  const results = await Promise.all(GLOBAL_FEEDS.map((f) => fetchRssFeed(f.url, f.source, 6)));
+  const all = dedup(sortByDate(results.flat())).slice(0, 15);
+  const translated = await translateIfNeeded(all);
+  globalCache = { data: translated, fetchedAt: Date.now() };
   return translated;
 }
 
 // ────────────────────────────────────────
-// 바이두 뉴스 (SerpAPI baidu_news 엔진)
+// 중국 뉴스 RSS (SerpAPI 대체)
 // ────────────────────────────────────────
-async function fetchBaiduNews(): Promise<NewsItem[]> {
-  if (isFresh(baiduCache, SERP_CACHE_TTL)) return baiduCache.data;
+const CHINA_FEEDS = [
+  { url: 'https://news.google.com/rss/search?q=%E8%82%A1%E5%B8%82+%E7%BB%8F%E6%B5%8E+%E9%9F%A9%E5%9B%BD&hl=zh-CN&gl=CN&ceid=CN:zh-Hans', source: '구글뉴스(중국)' },
+  { url: 'https://news.google.com/rss/search?q=China+economy+stock+market&hl=en&gl=US&ceid=US:en', source: 'Google(China)' },
+];
 
-  const data = await serpFetch({ engine: 'baidu_news', q: '股市 经济 韩国' });
-  if (!data) return (baiduCache as Cache<NewsItem[]> | null)?.data || [];
-
-  const newsResults = (data.organic_results || []) as Array<Record<string, unknown>>;
-  const items: NewsItem[] = newsResults.slice(0, 6).map((item) => ({
-    title: String(item.title || '').replace(/<[^>]*>/g, ''),
-    link: String(item.link || ''),
-    source: String(item.source || '바이두'),
-    pubDate: String(item.date || ''),
-    description: String(item.snippet || '').replace(/<[^>]*>/g, '').slice(0, 200),
-  }));
-
-  // 중국어 → 한국어 번역
-  const translated = await translateIfNeeded(items);
-  baiduCache = { data: translated, fetchedAt: Date.now() };
+async function fetchChinaNews(): Promise<NewsItem[]> {
+  if (isFresh(chinaCache, RSS_CACHE_TTL)) return chinaCache.data;
+  const results = await Promise.all(CHINA_FEEDS.map((f) => fetchRssFeed(f.url, f.source, 6)));
+  const all = dedup(sortByDate(results.flat())).slice(0, 10);
+  const translated = await translateIfNeeded(all);
+  chinaCache = { data: translated, fetchedAt: Date.now() };
   return translated;
 }
 
 // ────────────────────────────────────────
-// KCIF 국제금융센터 — 국제금융속보 직접 스크래핑
-// 페이지 형식: "[3.31] 미국 트럼프, 합의 실패하면..." (날짜별 한 줄 요약, 개별 링크 없음)
+// KCIF 국제금융센터 스크래핑
 // ────────────────────────────────────────
 async function fetchKcifReports(): Promise<NewsItem[]> {
   if (isFresh(kcifCache, RSS_CACHE_TTL)) return kcifCache.data;
@@ -269,11 +226,9 @@ async function fetchKcifReports(): Promise<NewsItem[]> {
     if (!res.ok) return (kcifCache as Cache<NewsItem[]> | null)?.data || [];
     const html = await res.text();
 
-    // HTML 태그 제거 후 텍스트에서 [M.DD] 패턴 추출
     const text = html.replace(/<[^>]*>/g, '\n').replace(/&nbsp;/g, ' ');
     const items: NewsItem[] = [];
 
-    // "[3.31] 제목 텍스트" 패턴 매칭
     const lineRegex = /\[(\d{1,2})\.(\d{1,2})\]\s*(.+)/g;
     let match;
     while ((match = lineRegex.exec(text)) !== null && items.length < 15) {
@@ -282,9 +237,7 @@ async function fetchKcifReports(): Promise<NewsItem[]> {
       const title = match[3].trim().replace(/\s+/g, ' ');
       if (!title || title.length < 5) continue;
 
-      // 날짜 생성 (올해 기준)
       const dateStr = `${currentYear}-${month}-${day}T09:00:00+09:00`;
-
       items.push({
         title: `[${match[1]}.${match[2]}] ${title}`,
         link: KCIF_URL,
@@ -313,7 +266,6 @@ function sortByDate(items: NewsItem[]): NewsItem[] {
   });
 }
 
-/** 제목 정규화 (비교용) */
 function normalizeTitle(title: string): string {
   return title
     .replace(/[\s\-–—·|:,."'""''()[\]{}]/g, '')
@@ -322,11 +274,9 @@ function normalizeTitle(title: string): string {
     .slice(0, 40);
 }
 
-/** 유사도 체크 (공통 문자 비율) */
 function isSimilar(a: string, b: string): boolean {
   if (a === b) return true;
   if (a.length < 5 || b.length < 5) return a === b;
-  // 짧은 쪽 기준 70% 이상 겹치면 유사
   const shorter = a.length < b.length ? a : b;
   const longer = a.length < b.length ? b : a;
   let match = 0;
@@ -341,7 +291,6 @@ function dedup(items: NewsItem[]): NewsItem[] {
   return items.filter((item) => {
     const norm = normalizeTitle(item.title);
     if (!norm) return false;
-    // 기존 항목 중 유사한 게 있으면 제거
     for (const existing of seen) {
       if (isSimilar(norm, existing)) return false;
     }
@@ -364,11 +313,11 @@ export async function GET(request: Request) {
         return NextResponse.json({ items, tab });
       }
       case 'global': {
-        const items = await fetchGoogleNews();
+        const items = await fetchGlobalNews();
         return NextResponse.json({ items, tab });
       }
       case 'china': {
-        const items = await fetchBaiduNews();
+        const items = await fetchChinaNews();
         return NextResponse.json({ items, tab });
       }
       case 'kcif': {
@@ -376,46 +325,37 @@ export async function GET(request: Request) {
         return NextResponse.json({ items, tab });
       }
       case 'korea': {
-        const hasSerpKey = !!getSerpKey();
         const [rss, naver, kcif] = await Promise.all([
-          fetchRssNews(),
-          hasSerpKey ? fetchNaverNews() : Promise.resolve([]),
+          fetchDomesticNews(),
+          fetchNaverNews(),
           fetchKcifReports(),
         ]);
-        // RSS + 네이버 dedup 후 KCIF는 별도로 보장 (dedup에서 빠지지 않도록)
         const mainNews = dedup(sortByDate([...rss, ...naver])).slice(0, 20);
         const kcifSlot = kcif.slice(0, 5);
         const combined = sortByDate([...mainNews, ...kcifSlot]).slice(0, 30);
         return NextResponse.json({ items: combined, tab: 'korea' });
       }
       case 'worldwide': {
-        const hasSerpKey = !!getSerpKey();
-        const [google, baidu] = await Promise.all([
-          hasSerpKey ? fetchGoogleNews() : Promise.resolve([]),
-          hasSerpKey ? fetchBaiduNews() : Promise.resolve([]),
+        const [global, china] = await Promise.all([
+          fetchGlobalNews(),
+          fetchChinaNews(),
         ]);
-        const combined = dedup([...google, ...baidu]).slice(0, 15);
+        const combined = dedup([...global, ...china]).slice(0, 15);
         return NextResponse.json({ items: combined, tab: 'worldwide' });
       }
       case 'all': {
-        const hasSerpKey = !!getSerpKey();
         const [rss, naver, kcif] = await Promise.all([
-          fetchRssNews(),
-          hasSerpKey ? fetchNaverNews() : Promise.resolve([]),
+          fetchDomesticNews(),
+          fetchNaverNews(),
           fetchKcifReports(),
         ]);
         const mainNews = dedup(sortByDate([...rss, ...naver])).slice(0, 20);
         const kcifSlot = kcif.slice(0, 5);
         const korea = sortByDate([...mainNews, ...kcifSlot]).slice(0, 30);
-        return NextResponse.json({
-          items: korea,
-          hasSerpKey,
-          tab: 'all',
-        });
+        return NextResponse.json({ items: korea, tab: 'all' });
       }
       default: {
-        // domestic (RSS)
-        const items = await fetchRssNews();
+        const items = await fetchDomesticNews();
         return NextResponse.json({ items, tab: 'domestic' });
       }
     }

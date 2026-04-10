@@ -136,13 +136,20 @@ function extractItems(data: Record<string, unknown>): Record<string, string>[] {
 
 /** 순위 항목 파싱 (공통) */
 function parseRankItem(item: Record<string, string>) {
+  // KIS prdy_vrss_sign: 1=상한, 2=상승, 3=보합, 4=하한, 5=하락
+  // 하락률 순위 API 는 prdy_vrss / prdy_ctrt 를 절대값(양수)으로 내려주므로
+  // sign 필드로 부호를 보정해야 프론트에서 파란색/마이너스 표시가 맞음.
+  const sign = String(item.prdy_vrss_sign || '');
+  const isDown = sign === '4' || sign === '5';
+  const rawChange = Math.abs(Number(item.prdy_vrss || 0));
+  const rawRate = Math.abs(Number(item.prdy_ctrt || 0));
   return {
     rank: Number(item.data_rank || 0),
     code: item.mksc_shrn_iscd || item.stck_shrn_iscd || '',
     name: item.hts_kor_isnm || '',
     price: Number(item.stck_prpr || 0),
-    change: Number(item.prdy_vrss || 0),
-    changeRate: Number(item.prdy_ctrt || 0),
+    change: isDown ? -rawChange : rawChange,
+    changeRate: isDown ? -rawRate : rawRate,
     volume: Number(item.acml_vol || 0),
     tradingValue: Number(item.acml_tr_pbmn || 0),
   };
