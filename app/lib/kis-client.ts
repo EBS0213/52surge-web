@@ -451,27 +451,32 @@ export interface SectorStock {
 }
 
 /**
- * 업종 구성종목 시세 조회 (FHPST01710000)
- * 특정 업종에 속한 종목들의 현재 시세를 반환
+ * 업종 구성종목 시세 조회
+ * 등락률 순위 API(FHPST01700000)에 업종코드를 넣어 해당 업종 종목만 조회.
+ * FID_INPUT_ISCD에 업종코드(예: "0013")를 넣으면 해당 업종 종목만 반환.
  */
 export async function getSectorStocks(sectorCode: string): Promise<SectorStock[]> {
-  const headers = await makeHeaders('FHPST01710000');
+  const headers = await makeHeaders('FHPST01700000');
   const params = new URLSearchParams({
     FID_COND_MRKT_DIV_CODE: 'J',
+    FID_COND_SCR_DIV_CODE: '20170',
     FID_INPUT_ISCD: sectorCode,
-    FID_DIV_CLS_CODE: '0',
-    FID_BLNG_CLS_CODE: '0',
+    FID_RANK_SORT_CLS_CODE: '0',         // 상승률 순
+    FID_INPUT_CNT_1: '0',
+    FID_PRC_CLS_CODE: '0',
+    FID_INPUT_PRICE_1: '',
+    FID_INPUT_PRICE_2: '',
+    FID_VOL_CNT: '',
     FID_TRGT_CLS_CODE: '0',
     FID_TRGT_EXLS_CLS_CODE: '0',
-    FID_INPUT_PRICE_1: '0',
-    FID_INPUT_PRICE_2: '0',
-    FID_VOL_CNT: '0',
-    FID_INPUT_DATE_1: '',
+    FID_DIV_CLS_CODE: '0',
+    FID_RSFL_RATE1: '',
+    FID_RSFL_RATE2: '',
   });
 
   try {
     const res = await fetch(
-      `${BASE_URL}/uapi/domestic-stock/v1/quotations/psearch-title?${params}`,
+      `${BASE_URL}/uapi/domestic-stock/v1/ranking/fluctuation?${params}`,
       { headers, cache: 'no-store' }
     );
     if (!res.ok) {
@@ -480,6 +485,7 @@ export async function getSectorStocks(sectorCode: string): Promise<SectorStock[]
     }
     const data = await res.json();
     const items: Record<string, string>[] = data.output || [];
+    console.log(`[KIS] Sector stocks ${sectorCode}: ${items.length} items`);
 
     return items
       .map((item) => {
