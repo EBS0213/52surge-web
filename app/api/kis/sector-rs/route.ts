@@ -2,9 +2,9 @@
  * 업종별 RS(Relative Strength) API
  * GET /api/kis/sector-rs?period=20
  *
- * 각 업종의 N일 수익률을 KOSPI 대비 상대 강도로 계산.
- * RS = (업종 N일 수익률) / (KOSPI N일 수익률) × 100
- *  → RS > 100 = 시장 대비 강세 / RS < 100 = 약세
+ * 모든 기간(5/10/20/60/120일)을 멀티 캐시로 관리.
+ * 첫 요청 시 해당 기간 계산 후, 백그라운드로 나머지 기간도 미리 캐시.
+ * 10분마다 자동 갱신 → 탭 전환 시 즉시 응답.
  */
 
 import { NextResponse, type NextRequest } from 'next/server';
@@ -15,18 +15,162 @@ import {
   isKISConfigured,
 } from '../../../lib/kis-client';
 
-// 캐시: 10분
-let cache: { data: unknown; fetchedAt: number; period: number } | null = null;
-const CACHE_TTL = 10 * 60 * 1000;
+// ── 멀티 기간 캐시 ──────────────────────────────────────────────
+const VALID_PERIODS = [5, 10, 20, 60, 120];
+const CACHE_TTL = 10 * 60 * 1000; // 10분
 
+interface CacheEntry {
+  data: unknown;
+  fetchedAt: number;
+}
+
+const periodCache = new Map<number, CacheEntry>();
+let bgRefreshRunning = false;
+
+// ── RS 계산 코어 ────────────────────────────────────────────────
+async function computeRS(p: number) {
+  const endDate = new Date();
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - Math.ceil(p * 1.8));
+
+  const fmt = (d: Date) =>
+    `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+
+  const startStr = fmt(startDate);
+  const endStr = fmt(endDate);
+
+  // KOSPI 벤치마크
+  const kospiChart = await getSectorDailyChart('0001', startStr, endStr);
+  if (kospiChart.length < 2) {
+    throw new Error(`KOSPI chart length=${kospiChart.length}`);
+  }
+
+  const kospiOld = kospiChart[0].close;
+  const kospiNew = kospiChart[kospiChart.length - 1].close;
+  const kospiReturn = kospiOld > 0 ? (kospiNew - kospiOld) / kospiOld : 0;
+
+  // 업종별 RS
+  const sectors = SECTOR_CODES.filter((s) => s.code !== '0001');
+  const BATCH = 2;
+  const results: {
+    code: string;
+    name: string;
+    currentIndex: number;
+    change: number;
+    changeRate: number;
+    periodReturn: number;
+    rs: number;
+    rsRank: number;
+  }[] = [];
+
+  for (let i = 0; i < sectors.length; i += BATCH) {
+    const batch = sectors.slice(i, i + BATCH);
+    const batchResults = await Promise.all(
+      batch.map(async (sector) => {
+        try {
+          const current = await getSectorCurrentIndex(sector.code);
+          const chart = await getSectorDailyChart(sector.code, startStr, endStr);
+          if (!chart || chart.length < 2) return null;
+
+          const oldPrice = chart[0].close;
+          const newPrice = chart[chart.length - 1].close;
+          const sectorReturn = oldPrice > 0 ? (newPrice - oldPrice) / oldPrice : 0;
+
+          return {
+            code: sector.code,
+            name: current?.name || sector.name,
+            currentIndex: current?.currentIndex || newPrice,
+            change: current?.change || 0,
+            changeRate: current?.changeRate || 0,
+            periodReturn: Math.round(sectorReturn * 10000) / 100,
+            rs: 0,
+            rsRank: 0,
+          };
+        } catch (err) {
+          console.error(`[sector-rs] ${sector.name} error:`, err);
+          return null;
+        }
+      })
+    );
+
+    results.push(...batchResults.filter((r): r is NonNullable<typeof r> => r !== null));
+
+    if (i + BATCH < sectors.length) {
+      await new Promise((r) => setTimeout(r, 300));
+    }
+  }
+
+  // RS 백분위 계산
+  const n = results.length;
+  results.sort((a, b) => a.periodReturn - b.periodReturn);
+  results.forEach((r, idx) => {
+    r.rs = n > 1 ? Math.round((idx / (n - 1)) * 10000) / 100 : 50;
+  });
+
+  results.sort((a, b) => b.rs - a.rs);
+  results.forEach((r, idx) => { r.rsRank = idx + 1; });
+
+  return {
+    period: p,
+    benchmark: {
+      name: 'KOSPI',
+      periodReturn: Math.round(kospiReturn * 10000) / 100,
+      currentIndex: kospiNew,
+    },
+    sectors: results,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+// ── 백그라운드 전체 기간 캐시 갱신 ─────────────────────────────
+async function refreshAllPeriods() {
+  if (bgRefreshRunning || !isKISConfigured()) return;
+  bgRefreshRunning = true;
+  console.log('[sector-rs] 백그라운드 캐시 갱신 시작');
+
+  for (const p of VALID_PERIODS) {
+    try {
+      const data = await computeRS(p);
+      periodCache.set(p, { data, fetchedAt: Date.now() });
+      console.log(`[sector-rs] cached period=${p}: ${(data as { sectors: unknown[] }).sectors.length} sectors`);
+    } catch (err) {
+      console.error(`[sector-rs] bg refresh period=${p} error:`, err);
+    }
+    // 기간 간 1초 딜레이
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+
+  bgRefreshRunning = false;
+  console.log('[sector-rs] 백그라운드 캐시 갱신 완료');
+}
+
+// ── 서버 시작 시 자동 캐시 + 주기적 갱신 ────────────────────────
+let intervalStarted = false;
+function ensureBackgroundRefresh() {
+  if (intervalStarted) return;
+  intervalStarted = true;
+
+  // 서버 시작 후 5초 뒤 첫 캐시
+  setTimeout(() => refreshAllPeriods(), 5000);
+
+  // 10분마다 갱신
+  setInterval(() => refreshAllPeriods(), CACHE_TTL);
+}
+
+// ── GET 핸들러 ──────────────────────────────────────────────────
 export async function GET(request: NextRequest) {
   const period = Number(request.nextUrl.searchParams.get('period') || '20');
-  const validPeriods = [5, 10, 20, 60, 120];
-  const p = validPeriods.includes(period) ? period : 20;
+  const p = VALID_PERIODS.includes(period) ? period : 20;
+
+  // 백그라운드 갱신 스케줄러 시작
+  ensureBackgroundRefresh();
 
   // 캐시 확인
-  if (cache && cache.period === p && Date.now() - cache.fetchedAt < CACHE_TTL) {
-    return NextResponse.json(cache.data, { headers: { 'X-Cache': 'HIT' } });
+  const cached = periodCache.get(p);
+  if (cached && Date.now() - cached.fetchedAt < CACHE_TTL) {
+    return NextResponse.json(cached.data, {
+      headers: { 'X-Cache': 'HIT', 'X-Cache-Age': String(Math.round((Date.now() - cached.fetchedAt) / 1000)) },
+    });
   }
 
   if (!isKISConfigured()) {
@@ -34,120 +178,42 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // 날짜 계산 (N거래일 ≈ N*1.6 캘린더일)
-    const endDate = new Date();
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - Math.ceil(p * 1.8));
+    // 캐시 미스: 직접 계산
+    const data = await computeRS(p);
+    periodCache.set(p, { data, fetchedAt: Date.now() });
 
-    const fmt = (d: Date) =>
-      `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
-
-    const startStr = fmt(startDate);
-    const endStr = fmt(endDate);
-
-    // KOSPI (0001) 시세를 먼저 가져옴 — 벤치마크
-    const kospiChart = await getSectorDailyChart('0001', startStr, endStr);
-    if (kospiChart.length < 2) {
-      console.error(`[sector-rs] KOSPI chart length=${kospiChart.length}, start=${startStr}, end=${endStr}`);
-      return NextResponse.json(
-        { error: '장 마감 후 또는 데이터 준비 중입니다. 잠시 후 다시 시도해주세요.' },
-        { status: 503 }
-      );
-    }
-
-    const kospiOld = kospiChart[0].close;
-    const kospiNew = kospiChart[kospiChart.length - 1].close;
-    const kospiReturn = kospiOld > 0 ? (kospiNew - kospiOld) / kospiOld : 0;
-
-    // 각 업종별 RS 계산 (KOSPI 자체 제외)
-    const sectors = SECTOR_CODES.filter((s) => s.code !== '0001');
-
-    // 순차 호출 (KIS 레이트 리밋 방지: 2개씩 배치, 딜레이 확대)
-    const BATCH = 2;
-    const results: {
-      code: string;
-      name: string;
-      currentIndex: number;
-      change: number;
-      changeRate: number;
-      periodReturn: number;  // N일 수익률 (%)
-      rs: number;            // RS 값
-      rsRank: number;        // 순위 (나중에 채움)
-    }[] = [];
-
-    for (let i = 0; i < sectors.length; i += BATCH) {
-      const batch = sectors.slice(i, i + BATCH);
-      const batchResults = await Promise.all(
-        batch.map(async (sector) => {
+    // 나머지 기간도 백그라운드로 미리 캐시
+    const otherPeriods = VALID_PERIODS.filter((v) => v !== p && !periodCache.has(v));
+    if (otherPeriods.length > 0) {
+      // fire-and-forget
+      (async () => {
+        for (const op of otherPeriods) {
           try {
-            // 현재 지수
-            const current = await getSectorCurrentIndex(sector.code);
-            // 기간별 시세
-            const chart = await getSectorDailyChart(sector.code, startStr, endStr);
-
-            if (!chart || chart.length < 2) return null;
-
-            const oldPrice = chart[0].close;
-            const newPrice = chart[chart.length - 1].close;
-            const sectorReturn = oldPrice > 0 ? (newPrice - oldPrice) / oldPrice : 0;
-
-            return {
-              code: sector.code,
-              name: current?.name || sector.name,
-              currentIndex: current?.currentIndex || newPrice,
-              change: current?.change || 0,
-              changeRate: current?.changeRate || 0,
-              periodReturn: Math.round(sectorReturn * 10000) / 100,
-              rs: 0,       // 아래에서 백분위로 재계산
-              rsRank: 0,
-            };
+            await new Promise((r) => setTimeout(r, 2000));
+            const d = await computeRS(op);
+            periodCache.set(op, { data: d, fetchedAt: Date.now() });
+            console.log(`[sector-rs] pre-cached period=${op}`);
           } catch (err) {
-            console.error(`[sector-rs] ${sector.name} error:`, err);
-            return null;
+            console.error(`[sector-rs] pre-cache period=${op} error:`, err);
           }
-        })
-      );
-
-      results.push(...batchResults.filter((r): r is NonNullable<typeof r> => r !== null));
-
-      // 배치 간 300ms 딜레이 (레이트 리밋 방지)
-      if (i + BATCH < sectors.length) {
-        await new Promise((r) => setTimeout(r, 300));
-      }
+        }
+      })();
     }
 
-    // RS 0~100 백분위 스케일 변환
-    // 수익률 기준으로 정렬 → 순위 → 백분위
-    // RS = (순위 - 1) / (총 업종 수 - 1) × 100  (1등 = 100, 꼴찌 = 0)
-    const n = results.length;
-    results.sort((a, b) => a.periodReturn - b.periodReturn); // 오름차순 (약한→강한)
-    results.forEach((r, idx) => {
-      r.rs = n > 1 ? Math.round((idx / (n - 1)) * 10000) / 100 : 50;
-    });
-
-    // 최종 정렬: RS 내림차순 (강한 업종이 위로)
-    results.sort((a, b) => b.rs - a.rs);
-    results.forEach((r, idx) => { r.rsRank = idx + 1; });
-
-    const data = {
-      period: p,
-      benchmark: {
-        name: 'KOSPI',
-        periodReturn: Math.round(kospiReturn * 10000) / 100,
-        currentIndex: kospiNew,
-      },
-      sectors: results,
-      updatedAt: new Date().toISOString(),
-    };
-
-    console.log(`[sector-rs] period=${p}: ${results.length} sectors`);
-    cache = { data, fetchedAt: Date.now(), period: p };
     return NextResponse.json(data);
   } catch (error) {
     console.error('[sector-rs] error:', error);
+
+    // 만료된 캐시라도 있으면 반환 (stale-while-error)
+    if (cached) {
+      return NextResponse.json(cached.data, {
+        headers: { 'X-Cache': 'STALE' },
+      });
+    }
+
     return NextResponse.json(
-      { error: `업종 RS 조회 실패: ${error instanceof Error ? error.message : ''}` },
-      { status: 500 }
+      { error: '장 마감 후 또는 데이터 준비 중입니다. 잠시 후 다시 시도해주세요.' },
+      { status: 503 }
     );
   }
 }
