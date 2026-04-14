@@ -5,7 +5,7 @@ import type { NextRequest } from "next/server";
  * HTML 페이지 응답의 Cache-Control을 강제로 짧게 오버라이드.
  * Next.js가 prerender된 정적 페이지에 s-maxage=31536000을 박아버리는 문제 해결.
  */
-export function middleware(req: NextRequest) {
+export function proxy(req: NextRequest) {
   const res = NextResponse.next();
 
   const url = req.nextUrl.pathname;
