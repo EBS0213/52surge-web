@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Navbar from '../components/Navbar';
 
 /* ── 타입 ─────────────────────────────────────────────────────── */
@@ -50,47 +50,79 @@ function rsBadgeClass(rs: number) {
 
 const PERIOD_LABELS: Record<Period, string> = { '1': '1일', '5': '5일', '20': '20일' };
 
-/* ── 테마 카드 컴포넌트 ──────────────────────────────────────── */
+/* ── 종목 로고 (외부 이미지 + 이니셜 fallback) ─────────────── */
+
+function StockLogo({ code, name }: { code: string; name: string }) {
+  const [imgError, setImgError] = useState(false);
+  const initial = name && name !== code ? name.charAt(0) : code.slice(0, 2);
+
+  if (imgError || !code) {
+    return (
+      <div className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
+        <span className="text-[9px] font-bold text-gray-500">{initial}</span>
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={`https://file.alphasquare.co.kr/media/images/stock_logo/kr/${code}.png`}
+      alt={name}
+      width={28}
+      height={28}
+      className="w-7 h-7 rounded-full object-cover flex-shrink-0 bg-gray-100"
+      onError={() => setImgError(true)}
+      loading="lazy"
+    />
+  );
+}
+
+/* ── 테마 카드 컴포넌트 (항상 펼침 + 내부 스크롤) ───────────── */
 
 function ThemeCard({ theme, period }: { theme: ThemeRS; period: Period }) {
-  const [expanded, setExpanded] = useState(false);
   const [stocks, setStocks] = useState<ThemeStock[]>([]);
   const [stocksLoading, setStocksLoading] = useState(false);
+  const [visible, setVisible] = useState(false);
+  const cardRef = useRef<HTMLDivElement>(null);
 
-  const fetchStocks = useCallback(async () => {
-    if (stocks.length > 0) return;
+  // IntersectionObserver: 뷰포트 진입 시 fetch
+  useEffect(() => {
+    const el = cardRef.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) setVisible(true); },
+      { rootMargin: '200px' }
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
+
+  // 뷰포트 진입 시 종목 데이터 로딩
+  useEffect(() => {
+    if (!visible || stocks.length > 0 || stocksLoading) return;
+    let cancelled = false;
     setStocksLoading(true);
-    try {
-      const res = await fetch(`/api/kis/theme-stocks?code=${theme.code}`);
-      if (!res.ok) throw new Error('fail');
-      const data = await res.json();
-      setStocks(data.stocks || []);
-    } catch {
-      setStocks([]);
-    } finally {
-      setStocksLoading(false);
-    }
-  }, [theme.code, stocks.length]);
+    fetch(`/api/kis/theme-stocks?code=${theme.code}`)
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then((data) => { if (!cancelled) setStocks(data.stocks || []); })
+      .catch(() => { if (!cancelled) setStocks([]); })
+      .finally(() => { if (!cancelled) setStocksLoading(false); });
+    return () => { cancelled = true; };
+  }, [visible, theme.code, stocks.length, stocksLoading]);
 
-  const handleToggle = () => {
-    const next = !expanded;
-    setExpanded(next);
-    if (next) fetchStocks();
-  };
-
-  const avgRate = theme.avgReturn[period];
-  const rs = theme.rs[period];
+  const avgRate = theme.avgReturn?.[period] ?? 0;
+  const rs = theme.rs?.[period] ?? 50;
   const rateColor =
     avgRate > 0 ? 'text-red-500' :
     avgRate < 0 ? 'text-blue-500' : 'text-gray-500';
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden flex flex-col">
-      {/* 헤더 (클릭 가능) */}
-      <button
-        onClick={handleToggle}
-        className="w-full text-left px-5 pt-4 pb-3 hover:bg-gray-50/50 transition-colors"
-      >
+    <div
+      ref={cardRef}
+      className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden flex flex-col"
+    >
+      {/* 헤더 */}
+      <div className="px-5 pt-4 pb-2">
         <div className="flex items-start justify-between">
           <div className="min-w-0 flex-1">
             <h3 className="text-base font-bold text-gray-900 truncate">
@@ -113,78 +145,65 @@ function ThemeCard({ theme, period }: { theme: ThemeRS; period: Period }) {
           </div>
         </div>
 
-        {/* 상승/하락 바 */}
+        {/* 상승/하락 */}
         {theme.loaded > 0 && (
-          <div className="flex items-center gap-3 mt-2 text-xs">
+          <div className="flex items-center gap-3 mt-1.5 text-xs">
             <span className="text-red-500">▲ {theme.upCount}</span>
             <span className="text-blue-500">▼ {theme.downCount}</span>
             {theme.loaded < theme.stockCount && (
               <span className="text-gray-300 ml-auto">
-                {theme.loaded}/{theme.stockCount} 로드
+                {theme.loaded}/{theme.stockCount}
               </span>
             )}
-            <span
-              className={`ml-auto transition-transform ${expanded ? 'rotate-180' : ''}`}
-            >
-              ▾
-            </span>
           </div>
         )}
-      </button>
+      </div>
 
-      {/* 종목 리스트 (확장 시) */}
-      {expanded && (
-        <>
-          <div className="border-t border-gray-100" />
-          <div className="px-5 py-2 max-h-72 overflow-y-auto">
-            {stocksLoading ? (
-              <div className="space-y-2.5 py-2">
-                {[...Array(5)].map((_, i) => (
-                  <div key={i} className="h-6 bg-gray-50 rounded animate-pulse" />
-                ))}
-              </div>
-            ) : stocks.length === 0 ? (
-              <div className="py-6 text-center text-xs text-gray-400">
-                데이터 로딩 중...
-              </div>
-            ) : (
-              <div>
-                {stocks.map((stock, idx) => {
-                  const sColor =
-                    stock.changeRate > 0 ? 'text-red-500' :
-                    stock.changeRate < 0 ? 'text-blue-500' : 'text-gray-400';
-                  return (
-                    <div key={stock.code} className="flex items-center py-2 gap-3">
-                      <span className="text-xs text-gray-400 w-5 text-right flex-shrink-0">
-                        {idx + 1}
-                      </span>
-                      <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
-                        <span className="text-[10px] font-bold text-gray-500">
-                          {stock.name.charAt(0)}
-                        </span>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <span className="text-sm text-gray-900 truncate block">
-                          {stock.name}
-                        </span>
-                      </div>
-                      <div className="text-right flex-shrink-0">
-                        <div className="text-sm font-mono text-gray-700">
-                          {stock.price.toLocaleString()}
-                        </div>
-                        <div className={`text-xs font-mono ${sColor}`}>
-                          {stock.changeRate > 0 ? '+' : ''}
-                          {stock.changeRate.toFixed(2)}%
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+      {/* 종목 리스트 (항상 표시, 내부 스크롤) */}
+      <div className="border-t border-gray-100" />
+      <div className="px-4 py-1.5 max-h-56 overflow-y-auto">
+        {stocksLoading ? (
+          <div className="space-y-2 py-2">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="h-5 bg-gray-50 rounded animate-pulse" />
+            ))}
           </div>
-        </>
-      )}
+        ) : stocks.length === 0 ? (
+          <div className="py-4 text-center text-[11px] text-gray-300">
+            {visible ? '종목 데이터 대기 중...' : ''}
+          </div>
+        ) : (
+          <div>
+            {stocks.map((stock, idx) => {
+              const sColor =
+                stock.changeRate > 0 ? 'text-red-500' :
+                stock.changeRate < 0 ? 'text-blue-500' : 'text-gray-400';
+              return (
+                <div key={stock.code} className="flex items-center py-1.5 gap-2">
+                  <span className="text-[10px] text-gray-300 w-4 text-right flex-shrink-0">
+                    {idx + 1}
+                  </span>
+                  <StockLogo code={stock.code} name={stock.name} />
+                  <div className="flex-1 min-w-0">
+                    <span className="text-xs text-gray-900 truncate block leading-tight">
+                      {stock.name}
+                    </span>
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    <div className="text-xs font-mono text-gray-700 leading-tight">
+                      {stock.price.toLocaleString()}
+                    </div>
+                    <div className={`text-[10px] font-mono ${sColor} leading-tight`}>
+                      {stock.changeRate > 0 ? '+' : ''}
+                      {stock.changeRate.toFixed(2)}%
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -231,8 +250,12 @@ export default function HybridPage() {
       !search || t.name.toLowerCase().includes(search.toLowerCase())
     )
     .sort((a, b) => {
-      if (sortBy === 'rs') return b.rs[period] - a.rs[period] || b.avgReturn[period] - a.avgReturn[period];
-      if (sortBy === 'rate') return b.avgReturn[period] - a.avgReturn[period];
+      const aReturn = a.avgReturn?.[period] ?? 0;
+      const bReturn = b.avgReturn?.[period] ?? 0;
+      const aRs = a.rs?.[period] ?? 50;
+      const bRs = b.rs?.[period] ?? 50;
+      if (sortBy === 'rs') return bRs - aRs || bReturn - aReturn;
+      if (sortBy === 'rate') return bReturn - aReturn;
       return a.name.localeCompare(b.name, 'ko');
     }) || [];
 
@@ -310,13 +333,14 @@ export default function HybridPage() {
               {[...Array(12)].map((_, i) => (
                 <div
                   key={i}
-                  className="bg-white rounded-2xl border border-gray-100 p-6 h-32 animate-pulse"
+                  className="bg-white rounded-2xl border border-gray-100 p-6 h-64 animate-pulse"
                 >
                   <div className="h-5 bg-gray-100 rounded w-32 mb-3" />
                   <div className="h-7 bg-gray-100 rounded w-16 mb-3" />
-                  <div className="flex gap-4">
-                    <div className="h-4 bg-gray-50 rounded w-12" />
-                    <div className="h-4 bg-gray-50 rounded w-12" />
+                  <div className="border-t border-gray-50 pt-3 space-y-2">
+                    {[...Array(4)].map((_, j) => (
+                      <div key={j} className="h-4 bg-gray-50 rounded" />
+                    ))}
                   </div>
                 </div>
               ))}

@@ -43,21 +43,28 @@ function saveFileCache() {
 // 서버 시작 시 파일 캐시 복원
 loadFileCache();
 
-// 서버 시작 시 일봉 캐시 워밍업 (첫 방문 대기 제거)
-let warmupDone = false;
-function warmupCache() {
-  if (warmupDone || !isKISConfigured()) return;
-  warmupDone = true;
-  fetchMarketData('daily' as PeriodKey)
-    .then((result) => {
-      cacheMap.set('market_daily', { data: result, fetchedAt: Date.now() });
-      saveFileCache();
-      console.log('[market] daily cache warmed up');
-    })
-    .catch(() => {});
+// 서버 시작 시 일봉 캐시 워밍업 + 주기적 백그라운드 갱신 (장중 최신화)
+let bgRefreshStarted = false;
+async function refreshDailyCache() {
+  if (!isKISConfigured()) return;
+  try {
+    const result = await fetchMarketData('daily' as PeriodKey);
+    cacheMap.set('market_daily', { data: result, fetchedAt: Date.now() });
+    saveFileCache();
+    console.log('[market] daily cache refreshed at', new Date().toISOString());
+  } catch (err) {
+    console.error('[market] daily cache refresh failed:', err);
+  }
 }
-// 모듈 로드 시 워밍업 시작 (파일 캐시 없을 때만 의미 있지만 항상 갱신)
-setTimeout(warmupCache, 3000);
+
+function startBackgroundRefresh() {
+  if (bgRefreshStarted) return;
+  bgRefreshStarted = true;
+  // 즉시 1회 + 50초마다 자동 갱신 (TTL 60초보다 짧게 해서 항상 fresh 상태 유지)
+  setTimeout(refreshDailyCache, 3000);
+  setInterval(refreshDailyCache, 50 * 1000);
+}
+startBackgroundRefresh();
 
 // 기간 설정
 // 캔들스틱(MA 시각화): daily(일봉), weekly(주봉), monthly(월봉)
@@ -412,13 +419,6 @@ async function fetchMarketData(periodKey: PeriodKey) {
   };
 }
 
-/** 백그라운드 캐시 갱신 */
-async function refreshCache(periodKey: PeriodKey, cacheKey: string) {
-  const result = await fetchMarketData(periodKey);
-  cacheMap.set(cacheKey, { data: result, fetchedAt: Date.now() });
-  saveFileCache();
-}
-
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const period = (searchParams.get('period') || 'daily') as PeriodKey;
@@ -440,23 +440,16 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  // 만료 캐시가 있으면 먼저 반환 + 백그라운드 갱신은 다음 호출에서
-  // (Stale-While-Revalidate: 오래된 데이터라도 즉시 보여주기)
-  if (cached) {
-    // 백그라운드에서 갱신 (fire-and-forget)
-    refreshCache(validPeriod, cacheKey).catch(() => {});
-    return NextResponse.json(cached.data, {
-      headers: { 'X-Cache': 'STALE' },
-    });
-  }
-
-  // 캐시가 아예 없을 때만 동기 fetch
+  // 만료 or 없음 → 동기 fetch. 실패 시 stale 캐시로 폴백
   try {
     const result = await fetchMarketData(validPeriod);
     cacheMap.set(cacheKey, { data: result, fetchedAt: Date.now() });
     saveFileCache();
-    return NextResponse.json(result);
+    return NextResponse.json(result, { headers: { 'X-Cache': 'MISS' } });
   } catch (error) {
+    if (cached) {
+      return NextResponse.json(cached.data, { headers: { 'X-Cache': 'STALE' } });
+    }
     return NextResponse.json(
       { error: `지수 조회 실패: ${error instanceof Error ? error.message : ''}` },
       { status: 500 }
