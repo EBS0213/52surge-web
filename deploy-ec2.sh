@@ -41,6 +41,8 @@ ssh -i "$EC2_KEY" -o StrictHostKeyChecking=accept-new "$EC2_HOST" bash <<EOF
   git pull
   echo "  ▶ npm install"
   npm install --no-audit --no-fund
+  echo "  ▶ .next 캐시 삭제 (prerender 잔존 제거)"
+  rm -rf .next
   echo "  ▶ npm run build"
   npm run build
   echo "  ▶ pm2 restart $PM2_APP"
