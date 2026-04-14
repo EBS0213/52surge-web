@@ -33,6 +33,10 @@ echo "▶ EC2 배포: $EC2_HOST"
 ssh -i "$EC2_KEY" -o StrictHostKeyChecking=accept-new "$EC2_HOST" bash <<EOF
   set -e
   cd $EC2_PROJECT
+  echo "  ▶ 로컬 변경 초기화 (원격 기준으로 정렬)"
+  git fetch origin
+  git reset --hard origin/main
+  git clean -fd
   echo "  ▶ git pull"
   git pull
   echo "  ▶ npm install"
