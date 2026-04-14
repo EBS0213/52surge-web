@@ -82,10 +82,11 @@ function calcBB(data: CandleData[], period = 20, mult = 2): { upper: (number | n
 }
 
 /** 시장 상태 판단
- * BULL: MA10 > MA5, MA20, MA50 모두 상회
- * NORMAL: MA10이 일부 MA만 상회 (회복 구간 포함)
- * BEAR: MA10 < MA5, MA20 하회
- * FEAR: 당일 하락하면서 MA20 또는 MA50을 하향 이탈
+ * 이동평균 정배열/역배열 + 당일 등락으로 판정
+ * BULL: 정배열 (MA5 > MA20, MA50 있으면 MA20 > MA50) — 상승 추세
+ * BEAR: 역배열 (MA5 < MA20, MA50 있으면 MA20 < MA50) — 하락 추세
+ * FEAR: 당일 하락 + 종가가 MA20 또는 MA50 아래로 이탈 (급락/공포 구간)
+ * NORMAL: 그 외 (혼조, 회복 구간 등)
  */
 type MarketState = 'BULL' | 'NORMAL' | 'BEAR' | 'FEAR';
 
@@ -97,7 +98,6 @@ function getMarketState(data: CandleData[]): { state: MarketState; ma5: number; 
   const ma5 = closes.slice(len - 5).reduce((a, b) => a + b, 0) / 5;
   const ma20 = closes.slice(len - 20).reduce((a, b) => a + b, 0) / 20;
   const ma50 = len >= 50 ? closes.slice(len - 50).reduce((a, b) => a + b, 0) / 50 : 0;
-  const ma10 = len >= 10 ? closes.slice(len - 10).reduce((a, b) => a + b, 0) / 10 : closes[len - 1];
   const todayClose = closes[len - 1];
   const prevClose = len >= 2 ? closes[len - 2] : todayClose;
   const dailyChange = todayClose - prevClose;
@@ -105,19 +105,18 @@ function getMarketState(data: CandleData[]): { state: MarketState; ma5: number; 
   let state: MarketState;
 
   // FEAR: 당일 하락 + 종가가 MA20 또는 MA50 아래로 이탈
-  // (반등 중인데 아직 MA20 아래인 경우는 FEAR가 아님)
   if (dailyChange < 0 && (todayClose < ma20 || (ma50 > 0 && todayClose < ma50))) {
     state = 'FEAR';
   }
-  // BEAR: 10거래일 평균 < MA5 AND < MA20
-  else if (ma10 < ma5 && ma10 < ma20) {
-    state = 'BEAR';
-  }
-  // BULL: 10거래일 평균 > MA5, MA20, MA50 모두 상회
-  else if (ma10 >= ma5 && ma10 >= ma20 && (ma50 === 0 || ma10 >= ma50)) {
+  // BULL: 정배열 (단기 > 중기 > 장기)
+  else if (ma5 > ma20 && (ma50 === 0 || ma20 > ma50)) {
     state = 'BULL';
   }
-  // NORMAL: 그 외 (회복 중, 혼조세 등)
+  // BEAR: 역배열 (단기 < 중기 < 장기)
+  else if (ma5 < ma20 && (ma50 === 0 || ma20 < ma50)) {
+    state = 'BEAR';
+  }
+  // NORMAL: 그 외 (골든/데드크로스 혼조, 회복 구간)
   else {
     state = 'NORMAL';
   }
