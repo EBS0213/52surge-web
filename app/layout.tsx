@@ -12,6 +12,9 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+// 정적 prerender 방지 — 모든 페이지를 동적으로 렌더링 (배포 즉시 반영)
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "OURTLE | 52주 신고가 추적",
   description: "52주 신고가를 실시간으로 추적합니다",
