@@ -108,15 +108,21 @@ function getMarketState(data: CandleData[]): { state: MarketState; ma5: number; 
   if (dailyChange < 0 && (todayClose < ma20 || (ma50 > 0 && todayClose < ma50))) {
     state = 'FEAR';
   }
-  // BULL: 정배열 (단기 > 중기 > 장기)
-  else if (ma5 > ma20 && (ma50 === 0 || ma20 > ma50)) {
+  // BULL: 정배열 (단기 > 중기 > 장기) + 종가가 MA20 유지
+  // 정배열이어도 종가가 MA20 하향이탈이면 추세 약화 → NORMAL
+  else if (ma5 > ma20 && (ma50 === 0 || ma20 > ma50) && todayClose >= ma20) {
     state = 'BULL';
   }
-  // BEAR: 역배열 (단기 < 중기 < 장기)
-  else if (ma5 < ma20 && (ma50 === 0 || ma20 < ma50)) {
+  // BEAR: 역배열 (단기 < 중기 < 장기) + 종가가 MA20 아래
+  // 역배열이어도 종가가 MA20·MA50 모두 상회하면 추세 전환 초입 → NORMAL
+  else if (
+    ma5 < ma20 &&
+    (ma50 === 0 || ma20 < ma50) &&
+    !(todayClose > ma20 && (ma50 === 0 || todayClose > ma50))
+  ) {
     state = 'BEAR';
   }
-  // NORMAL: 그 외 (골든/데드크로스 혼조, 회복 구간)
+  // NORMAL: 그 외 (혼조, 추세 전환 구간, 반등 초입)
   else {
     state = 'NORMAL';
   }
